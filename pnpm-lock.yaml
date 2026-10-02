@@ -15,6 +15,28 @@ importers:
         specifier: ^5.9.2
         version: 5.9.3
 
+  W:/projects/lingua/packages/lingua-core:
+    dependencies:
+      ts-fsrs:
+        specifier: ^5.2.3
+        version: 5.4.2
+      ulid:
+        specifier: ^3.0.1
+        version: 3.0.2
+      wink-lemmatizer:
+        specifier: ^3.0.4
+        version: 3.0.4
+    devDependencies:
+      '@types/node':
+        specifier: ^24.3.0
+        version: 24.19.0
+      typescript:
+        specifier: ^5.9.2
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.7(@types/node@24.19.0)(tsx@4.23.15)
+
   apps/shell:
     dependencies:
       '@lingua/core':
@@ -629,6 +651,15 @@ packages:
     engines: {node: '>=8'}
     hasBin: true
 
+  wink-lemmatizer@3.0.4:
+    resolution: {integrity: sha512-EdLJfy1xLF2ze2cp9Z3qiEWjiq+V8ZVRWiWooCXTXR0AyPxY8ezm4E0puJ0yIj5szzED9tcXV2U7RboaGvboFw==}
+
+  wink-lexicon@2.2.0:
+    resolution: {integrity: sha512-QIuHS9r/HV6q3PCCz6pymg4gbsryW9wDk8CHdU+sDn0kJcHpECNDIcdY0Q/mZpqxtFLp9dzIw7pjcStLBbGZGg==}
+
+  wink-porter2-stemmer@2.0.1:
+    resolution: {integrity: sha512-0g+RkkqhRXFmSpJQStVXW5N/WsshWpJXsoDRW7DwVkGI2uDT6IBCoq3xdH5p6IHLaC6ygk7RWUsUx4alKxoagQ==}
+
 snapshots:
 
   '@esbuild/aix-ppc64@0.28.2':
@@ -1086,3 +1117,12 @@ snapshots:
     dependencies:
       siginfo: 2.0.0
       stackback: 0.0.2
+
+  wink-lemmatizer@3.0.4:
+    dependencies:
+      wink-lexicon: 2.2.0
+      wink-porter2-stemmer: 2.0.1
+
+  wink-lexicon@2.2.0: {}
+
+  wink-porter2-stemmer@2.0.1: {}

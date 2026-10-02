@@ -31,3 +31,14 @@ export function insertChunk(
     options.createdAt ?? T0,
   );
 }
+
+export function insertContent(
+  db: DatabaseSync,
+  id: string,
+  options: { language?: string; body?: string; createdAt?: number } = {},
+): void {
+  db.prepare(
+    `INSERT INTO content_items (id, language, body, status, created_at)
+     VALUES (?, ?, ?, 'inbox', ?)`,
+  ).run(id, options.language ?? "en", options.body ?? "", options.createdAt ?? T0);
+}

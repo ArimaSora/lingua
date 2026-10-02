@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { migrate, openDatabase, SCHEMA_VERSION } from "../src/index";
 
-describe("schema v1", () => {
-  it("creates all v1 tables", () => {
+describe("schema", () => {
+  it("creates all tables", () => {
     const db = openDatabase(":memory:");
     migrate(db);
 
@@ -13,6 +13,7 @@ describe("schema v1", () => {
 
     expect(tables).toEqual([
       "character_cards",
+      "chunk_occurrences",
       "chunks",
       "content_items",
       "error_logs",
@@ -26,7 +27,7 @@ describe("schema v1", () => {
     ]);
   });
 
-  it("records the schema version and is idempotent", () => {
+  it("records every schema version and is idempotent", () => {
     const db = openDatabase(":memory:");
     migrate(db);
     migrate(db);
@@ -36,7 +37,7 @@ describe("schema v1", () => {
       .all()
       .map((row) => (row as { version: number }).version);
 
-    expect(versions).toEqual([SCHEMA_VERSION]);
+    expect(versions).toEqual([...Array(SCHEMA_VERSION).keys()].map((i) => i + 1));
   });
 
   it("isolates rows by language and reserves user_id", () => {
@@ -50,5 +51,27 @@ describe("schema v1", () => {
 
     expect(chunkColumns).toContain("user_id");
     expect(chunkColumns).toContain("language");
+  });
+
+  it("separates chunk occurrence records from the chunk entity (issue #2)", () => {
+    const db = openDatabase(":memory:");
+    migrate(db);
+
+    const occurrenceColumns = db
+      .prepare("PRAGMA table_info(chunk_occurrences)")
+      .all()
+      .map((row) => (row as { name: string }).name);
+
+    for (const column of [
+      "chunk_id",
+      "content_id",
+      "start_token",
+      "end_token",
+      "surface",
+      "user_id",
+      "language",
+    ]) {
+      expect(occurrenceColumns).toContain(column);
+    }
   });
 });

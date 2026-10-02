@@ -12,7 +12,8 @@
   },
   "dependencies": {
     "ts-fsrs": "^5.2.3",
-    "ulid": "^3.0.1"
+    "ulid": "^3.0.1",
+    "wink-lemmatizer": "^3.0.4"
   },
   "devDependencies": {
     "@types/node": "^24.3.0",

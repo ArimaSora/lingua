@@ -2,7 +2,7 @@ import { DatabaseSync } from "node:sqlite";
 
 export type Database = DatabaseSync;
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 export function openDatabase(path: string): Database {
   const db = new DatabaseSync(path);
@@ -18,6 +18,7 @@ type Migration = {
 
 // Schema v1：语块、事件、内容条目、订阅源、角色卡、关系事实、错误日志、
 // 指标事件、学习者档案、参数快照（docs/specs/mvp.md 数据 schema + issue #1）。
+// Schema v2：chunk_occurrences——语块实体与其在内容中的出现记录分离（issue #2）。
 // 全部按语言隔离，user_id 预留。
 const MIGRATIONS: Migration[] = [
   {
@@ -154,6 +155,29 @@ const MIGRATIONS: Migration[] = [
         params TEXT NOT NULL,
         created_at INTEGER NOT NULL
       );
+    `,
+  },
+  {
+    version: 2,
+    // 出现记录是派生数据：正文重扫时整体替换（见 chunk-store scanContent），
+    // 不像 events 那样 append-only。
+    sql: `
+      CREATE TABLE chunk_occurrences (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL DEFAULT 'local',
+        language TEXT NOT NULL,
+        chunk_id TEXT NOT NULL REFERENCES chunks (id),
+        content_id TEXT NOT NULL REFERENCES content_items (id),
+        start_token INTEGER NOT NULL,
+        end_token INTEGER NOT NULL,
+        surface TEXT NOT NULL,
+        matched_form TEXT NOT NULL,
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX idx_chunk_occurrences_chunk
+        ON chunk_occurrences (chunk_id, content_id);
+      CREATE INDEX idx_chunk_occurrences_content
+        ON chunk_occurrences (content_id);
     `,
   },
 ];
