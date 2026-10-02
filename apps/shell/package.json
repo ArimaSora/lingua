@@ -1,0 +1,19 @@
+{
+  "name": "@lingua/shell",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "lingua": "./src/cli.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@lingua/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "typescript": "^5.9.2"
+  }
+}

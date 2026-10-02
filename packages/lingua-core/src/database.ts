@@ -1,0 +1,189 @@
+import { DatabaseSync } from "node:sqlite";
+
+export type Database = DatabaseSync;
+
+export const SCHEMA_VERSION = 1;
+
+export function openDatabase(path: string): Database {
+  const db = new DatabaseSync(path);
+  db.exec("PRAGMA journal_mode = WAL");
+  db.exec("PRAGMA foreign_keys = ON");
+  return db;
+}
+
+type Migration = {
+  version: number;
+  sql: string;
+};
+
+// Schema v1：语块、事件、内容条目、订阅源、角色卡、关系事实、错误日志、
+// 指标事件、学习者档案、参数快照（docs/specs/mvp.md 数据 schema + issue #1）。
+// 全部按语言隔离，user_id 预留。
+const MIGRATIONS: Migration[] = [
+  {
+    version: 1,
+    sql: `
+      CREATE TABLE chunks (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL DEFAULT 'local',
+        language TEXT NOT NULL,
+        canonical_form TEXT NOT NULL,
+        chunk_type TEXT NOT NULL CHECK (chunk_type IN ('collocation', 'idiom')),
+        cefr TEXT CHECK (cefr IN ('A1', 'A2', 'B1', 'B2', 'C1', 'C2')),
+        variants TEXT NOT NULL DEFAULT '[]',
+        slot_pattern TEXT,
+        source_content_id TEXT,
+        status TEXT NOT NULL DEFAULT 'candidate'
+          CHECK (status IN ('candidate', 'enrolled')),
+        created_at INTEGER NOT NULL
+      );
+
+      CREATE TABLE events (
+        event_id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL DEFAULT 'local',
+        language TEXT NOT NULL,
+        observation_id TEXT NOT NULL,
+        chunk_id TEXT REFERENCES chunks (id),
+        occurred_at INTEGER NOT NULL,
+        recorded_at INTEGER NOT NULL,
+        topic_id TEXT,
+        quote TEXT,
+        assistance TEXT CHECK (assistance IN ('none', 'assisted')),
+        outcome TEXT CHECK (outcome IN ('correct', 'wrong', 'not-produced')),
+        event_type TEXT NOT NULL,
+        confidence REAL,
+        judge_name TEXT,
+        judge_version TEXT,
+        params_version TEXT,
+        fsrs_rating TEXT CHECK (fsrs_rating IN ('again', 'good')),
+        pfa_outcome TEXT CHECK (pfa_outcome IN ('success', 'failure')),
+        applied INTEGER NOT NULL DEFAULT 0,
+        supersedes_event_id TEXT,
+        voids_event_id TEXT,
+        void_reason TEXT
+      );
+      CREATE INDEX idx_events_observation
+        ON events (observation_id, recorded_at, event_id);
+      CREATE INDEX idx_events_chunk
+        ON events (chunk_id, occurred_at, event_id);
+
+      CREATE TABLE content_items (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL DEFAULT 'local',
+        language TEXT NOT NULL,
+        feed_id TEXT,
+        source_url TEXT,
+        title TEXT,
+        body TEXT,
+        difficulty_score REAL,
+        cefr_estimate TEXT CHECK (cefr_estimate IN ('A1', 'A2', 'B1', 'B2', 'C1', 'C2')),
+        perishability TEXT CHECK (perishability IN ('perishable', 'evergreen')),
+        unlock_level TEXT CHECK (unlock_level IN ('A1', 'A2', 'B1', 'B2', 'C1', 'C2')),
+        status TEXT NOT NULL DEFAULT 'inbox',
+        created_at INTEGER NOT NULL
+      );
+
+      CREATE TABLE feeds (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL DEFAULT 'local',
+        language TEXT NOT NULL,
+        url TEXT NOT NULL,
+        title TEXT,
+        kind TEXT NOT NULL DEFAULT 'rss' CHECK (kind IN ('rss', 'podcast')),
+        created_at INTEGER NOT NULL
+      );
+
+      CREATE TABLE character_cards (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL DEFAULT 'local',
+        language TEXT NOT NULL,
+        name TEXT NOT NULL,
+        persona TEXT NOT NULL DEFAULT '{}',
+        interests TEXT NOT NULL DEFAULT '[]',
+        scaffolding_tier TEXT,
+        register_range TEXT,
+        language_pair TEXT NOT NULL DEFAULT '{}',
+        created_at INTEGER NOT NULL
+      );
+
+      CREATE TABLE relationship_facts (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL DEFAULT 'local',
+        language TEXT NOT NULL,
+        card_id TEXT NOT NULL REFERENCES character_cards (id),
+        fact TEXT NOT NULL,
+        source TEXT,
+        created_at INTEGER NOT NULL
+      );
+
+      CREATE TABLE error_logs (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL DEFAULT 'local',
+        language TEXT NOT NULL,
+        original_text TEXT NOT NULL,
+        error_type TEXT,
+        topic_id TEXT,
+        event_id TEXT,
+        created_at INTEGER NOT NULL
+      );
+
+      CREATE TABLE metric_events (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL DEFAULT 'local',
+        language TEXT NOT NULL,
+        metric_name TEXT NOT NULL,
+        value REAL,
+        payload TEXT NOT NULL DEFAULT '{}',
+        created_at INTEGER NOT NULL
+      );
+
+      CREATE TABLE learner_profiles (
+        user_id TEXT NOT NULL DEFAULT 'local',
+        language TEXT NOT NULL,
+        cefr_anchor TEXT CHECK (cefr_anchor IN ('A1', 'A2', 'B1', 'B2', 'C1', 'C2')),
+        scaffolding_tier TEXT,
+        language_pair TEXT NOT NULL DEFAULT '{}',
+        updated_at INTEGER NOT NULL,
+        PRIMARY KEY (user_id, language)
+      );
+
+      CREATE TABLE param_snapshots (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL DEFAULT 'local',
+        language TEXT NOT NULL DEFAULT '*',
+        params TEXT NOT NULL,
+        created_at INTEGER NOT NULL
+      );
+    `,
+  },
+];
+
+export function migrate(db: Database): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS schema_migrations (
+      version INTEGER PRIMARY KEY,
+      applied_at INTEGER NOT NULL
+    )
+  `);
+  const applied = new Set(
+    db
+      .prepare("SELECT version FROM schema_migrations")
+      .all()
+      .map((row) => (row as { version: number }).version),
+  );
+  const record = db.prepare(
+    "INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)",
+  );
+  for (const migration of MIGRATIONS) {
+    if (applied.has(migration.version)) continue;
+    db.exec("BEGIN");
+    try {
+      db.exec(migration.sql);
+      record.run(migration.version, Date.now());
+      db.exec("COMMIT");
+    } catch (error) {
+      db.exec("ROLLBACK");
+      throw error;
+    }
+  }
+}

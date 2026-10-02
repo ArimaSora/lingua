@@ -24,4 +24,17 @@ A personal language-learning agent that hides pre-learning and review inside con
 
 ## Quickstart
 
-施工中。第一张施工票据完成后更新。
+要求 Node.js ≥ 24（内置 `node:sqlite`）与 pnpm。
+
+```bash
+pnpm install
+pnpm typecheck   # 全部包 tsc --noEmit
+pnpm test        # 全部测试（假时钟驱动，无真实等待）
+pnpm lingua init # 初始化数据目录与 SQLite schema（默认 ~/.lingua/，可用 LINGUA_DATA_DIR 覆盖）
+```
+
+## 仓库结构
+
+- `packages/lingua-core` — 框架无关的领域包：append-only 事件存储（窄写入接口 `recordEvidence`，ADR-0014）、有效观测解析管线、as-of 双模式投影（当时所知 / 当前认知）、SQLite schema v1、时钟端口（含 ID 生成，可注入假时钟）
+- `apps/shell` — 薄壳 CLI（agent loop、渠道、适配器随后续票据加入）
+- `docs/` — 规格、ADR、研究报告
