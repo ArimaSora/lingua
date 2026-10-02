@@ -1,0 +1,18 @@
+内容许可：Creative Commons Attribution 4.0 International (CC BY 4.0)
+
+本仓库中的「内容」——包括但不限于 Bootstrap 课包、语言学知识条目、
+docs/research/ 下的研究报告、docs/adr/ 与 docs/specs/ 下的设计与决策文档、
+GLOSSARY.md——以 CC BY 4.0 许可发布。
+
+完整法律文本：
+https://creativecommons.org/licenses/by/4.0/legalcode
+
+简要含义：
+- 可共享、可改编，包括商业用途；
+- 须署名（注明来源、许可链接、是否修改）。
+
+注意：本仓库引用的第三方数据不适用本许可，其许可以各自来源为准，例如：
+- EFLLex 词表：CC BY-NC-SA（不随本仓库分发，由下载脚本获取）
+- Tatoeba 例句：CC BY 2.0 FR（使用须署名）
+
+代码（软件）许可见 LICENSE（MIT）。

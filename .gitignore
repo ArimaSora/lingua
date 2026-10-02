@@ -1,0 +1,12 @@
+node_modules/
+dist/
+*.db
+*.db-journal
+*.sqlite3
+config.toml
+config.local.toml
+.env
+.env.*
+!.env.example
+.scratch/
+.DS_Store
