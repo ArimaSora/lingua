@@ -2,7 +2,7 @@ import { DatabaseSync } from "node:sqlite";
 
 export type Database = DatabaseSync;
 
-export const SCHEMA_VERSION = 8;
+export const SCHEMA_VERSION = 11;
 
 export function openDatabase(path: string): Database {
   const db = new DatabaseSync(path);
@@ -31,7 +31,8 @@ type Migration = {
 // 供「不泄题」规则审计。
 // 全部按语言隔离，user_id 预留。
 // 版本号占位协调：v5 归票 06（并发施工）；v6 归票 12；v7 归本票（issue #7）；
-// v8 归票 10（并发施工）。
+// v8 归票 10（并发施工）；v11 归本票（issue #13）。
+// v9/v10/v12/v13 由并发票据（08/09/14/11）持有。
 const MIGRATIONS: Migration[] = [
   {
     version: 1,
@@ -333,6 +334,28 @@ const MIGRATIONS: Migration[] = [
         CHECK (pipeline_status IN ('inbox','unlock_queued','simplified','dismissed'));
       CREATE INDEX idx_content_items_pipeline_status
         ON content_items (user_id, language, pipeline_status, created_at);
+    `,
+  },
+  {
+    version: 11,
+    // 语域标注与支架档位控制（issue #13）：
+    // 角色消息携带语域标注（annotations）；学习者档案扩展临时档位、待确认建议、
+    // 建议历史，全部复用 learner_profiles 已有列，不新增表。
+    sql: `
+      ALTER TABLE messages ADD COLUMN annotations TEXT NOT NULL DEFAULT '[]';
+
+      ALTER TABLE learner_profiles ADD COLUMN temporary_tier TEXT
+        CHECK (temporary_tier IN ('full-support','on-request','clarify-only','target-only'));
+      ALTER TABLE learner_profiles ADD COLUMN temporary_until INTEGER;
+      ALTER TABLE learner_profiles ADD COLUMN pending_suggested_tier TEXT
+        CHECK (pending_suggested_tier IN ('full-support','on-request','clarify-only','target-only'));
+      ALTER TABLE learner_profiles ADD COLUMN pending_reason TEXT;
+      ALTER TABLE learner_profiles ADD COLUMN pending_at INTEGER;
+      ALTER TABLE learner_profiles ADD COLUMN last_suggested_tier TEXT
+        CHECK (last_suggested_tier IN ('full-support','on-request','clarify-only','target-only'));
+      ALTER TABLE learner_profiles ADD COLUMN last_suggested_at INTEGER;
+      ALTER TABLE learner_profiles ADD COLUMN last_suggestion_response TEXT
+        CHECK (last_suggestion_response IN ('accepted','rejected'));
     `,
   },
 ];

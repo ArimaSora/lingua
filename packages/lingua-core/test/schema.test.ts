@@ -167,4 +167,33 @@ describe("schema", () => {
       expect(placementColumns).toContain(column);
     }
   });
+
+  it("tracks register annotations and scaffolding tier control (issue #13)", () => {
+    const db = openDatabase(":memory:");
+    migrate(db);
+
+    const messageColumns = db
+      .prepare("PRAGMA table_info(messages)")
+      .all()
+      .map((row) => (row as { name: string }).name);
+    expect(messageColumns).toContain("annotations");
+
+    const profileColumns = db
+      .prepare("PRAGMA table_info(learner_profiles)")
+      .all()
+      .map((row) => (row as { name: string }).name);
+    for (const column of [
+      "scaffolding_tier",
+      "temporary_tier",
+      "temporary_until",
+      "pending_suggested_tier",
+      "pending_reason",
+      "pending_at",
+      "last_suggested_tier",
+      "last_suggested_at",
+      "last_suggestion_response",
+    ]) {
+      expect(profileColumns).toContain(column);
+    }
+  });
 });
