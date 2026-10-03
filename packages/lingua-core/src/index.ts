@@ -1,3 +1,17 @@
+export {
+  addRelationshipFact,
+  characterCardFacts,
+  getCharacterCard,
+  loadCharacterCard,
+  parseCharacterCard,
+  REGISTER_LEVELS,
+} from "./character-card";
+export type {
+  CharacterCard,
+  LanguagePair,
+  Register,
+  RegisterRange,
+} from "./character-card";
 export { matchChunks } from "./chunk-matching";
 export type {
   ChunkDescriptor,
@@ -38,6 +52,16 @@ export type {
 } from "./event-store";
 export { lemmatizeWord, tokenize } from "./lemmatizer";
 export type { Token } from "./lemmatizer";
+export { openMessageStore } from "./message-store";
+export type {
+  ChatContact,
+  ChatMessage,
+  ChatRole,
+  MessageStore,
+  MessageStoreOptions,
+} from "./message-store";
 export { DEFAULT_PFA_PARAMS, pfaMastery } from "./pfa";
 export type { PfaParams } from "./pfa";
 export type { ChunkMastery, Projection, ProjectionMode, SkillMastery } from "./projection";
+export { DEFAULT_SCAFFOLDING_TIER, parseScaffoldingTier, SCAFFOLDING_TIERS, scaffoldingPolicy } from "./scaffolding";
+export type { L1Rescue, ScaffoldingPolicy, ScaffoldingTier } from "./scaffolding";

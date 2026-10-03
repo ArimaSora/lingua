@@ -20,6 +20,7 @@ describe("schema", () => {
       "events",
       "feeds",
       "learner_profiles",
+      "messages",
       "metric_events",
       "param_snapshots",
       "relationship_facts",
