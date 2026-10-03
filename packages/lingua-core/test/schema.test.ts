@@ -101,6 +101,7 @@ describe("schema", () => {
       "expires_at",
       "simplified_source_id",
       "pipeline_status",
+      "audio_url",
     ]) {
       expect(contentColumns).toContain(column);
     }
@@ -166,5 +167,24 @@ describe("schema", () => {
     ]) {
       expect(placementColumns).toContain(column);
     }
+  });
+
+  it("tracks RSS subscription poll state and audio content (issue #11)", () => {
+    const db = openDatabase(":memory:");
+    migrate(db);
+
+    const feedColumns = db
+      .prepare("PRAGMA table_info(feeds)")
+      .all()
+      .map((row) => (row as { name: string }).name);
+    for (const column of ["last_fetched_at", "fetch_interval_ms"]) {
+      expect(feedColumns).toContain(column);
+    }
+
+    const contentColumns = db
+      .prepare("PRAGMA table_info(content_items)")
+      .all()
+      .map((row) => (row as { name: string }).name);
+    expect(contentColumns).toContain("audio_url");
   });
 });

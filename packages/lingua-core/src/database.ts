@@ -2,7 +2,7 @@ import { DatabaseSync } from "node:sqlite";
 
 export type Database = DatabaseSync;
 
-export const SCHEMA_VERSION = 8;
+export const SCHEMA_VERSION = 13;
 
 export function openDatabase(path: string): Database {
   const db = new DatabaseSync(path);
@@ -30,8 +30,8 @@ type Migration = {
 // placements 落库时间窗判定），未命中回炉重排。prompt 留存话题生成提示原文，
 // 供「不泄题」规则审计。
 // 全部按语言隔离，user_id 预留。
-// 版本号占位协调：v5 归票 06（并发施工）；v6 归票 12；v7 归本票（issue #7）；
-// v8 归票 10（并发施工）。
+// 版本号占位协调：v5 归票 06（并发施工）；v6 归票 12；v7 归票 07；
+// v8 归票 10（并发施工）；v9/v10/v11/v12 由其它并发票据占位；v13 归票 11。
 const MIGRATIONS: Migration[] = [
   {
     version: 1,
@@ -333,6 +333,16 @@ const MIGRATIONS: Migration[] = [
         CHECK (pipeline_status IN ('inbox','unlock_queued','simplified','dismissed'));
       CREATE INDEX idx_content_items_pipeline_status
         ON content_items (user_id, language, pipeline_status, created_at);
+    `,
+  },
+  {
+    version: 13,
+    // RSS 订阅管理（issue #11）：
+    // feeds 表增加轮询状态字段；content_items 增加 audio_url 以支持带文字稿音频。
+    sql: `
+      ALTER TABLE feeds ADD COLUMN last_fetched_at INTEGER;
+      ALTER TABLE feeds ADD COLUMN fetch_interval_ms INTEGER;
+      ALTER TABLE content_items ADD COLUMN audio_url TEXT;
     `,
   },
 ];

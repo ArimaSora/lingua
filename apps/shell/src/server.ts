@@ -15,8 +15,10 @@ import {
   openExplanationLog,
   openKnowledgeStore,
   openMessageStore,
+  openRssSubscriptions,
   openScheduler,
   parseBootstrapPack,
+  parseRssFeed,
   runBackup,
   SystemClock,
   type CharacterCard,
@@ -26,6 +28,8 @@ import {
   type CoarseGrader,
   type Database,
   type PerishabilityTagger,
+  type RssFetcher,
+  type RssSubscriptions,
   type Scheduler,
   type Wordlist,
 } from "@lingua/core";
@@ -62,6 +66,8 @@ export type StartServerOptions = {
   wordlist?: Wordlist;
   grader?: CoarseGrader | null;
   tagger?: PerishabilityTagger | null;
+  // RSS 抓取器可注入；无注入时使用真实 fetch（e2e 必须传入假抓取器避免真实网络）。
+  rssFetcher?: RssFetcher;
 };
 
 export type RunningServer = {
@@ -86,6 +92,18 @@ const BACKUP_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const BACKUP_KEEP_LAST = 7;
 // 解锁队列过期清理：每日一次（issue #10）。
 const UNLOCK_QUEUE_EXPIRE_INTERVAL_MS = 24 * 60 * 60 * 1000;
+// RSS 轮询：每 15 分钟一次（issue #11）。
+const RSS_POLL_INTERVAL_MS = 15 * 60 * 1000;
+
+function createDefaultRssFetcher(): RssFetcher {
+  return async (url: string) => {
+    const response = await fetch(url, { redirect: "follow" });
+    if (!response.ok) {
+      throw new Error(`RSS 抓取失败：${response.status} ${response.statusText}`);
+    }
+    return response.text();
+  };
+}
 
 function readCard(cardPath: string | undefined, dir: string): unknown {
   const candidates = cardPath ? [resolveHome(cardPath)] : [join(dir, "companion.json")];
@@ -175,6 +193,16 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
     tagger: options.tagger,
   });
 
+  const rss: RssSubscriptions = openRssSubscriptions({
+    db,
+    clock,
+    language,
+    pipeline,
+    messageStore: store,
+    fetcher: options.rssFetcher ?? createDefaultRssFetcher(),
+    parser: parseRssFeed,
+  });
+
   const model = options.model ?? buildModel(options.configPath);
   // 知识条目库（issue #12）：随包种子内容，启动时加载并全量校验。
   const knowledge = openKnowledgeStore({ entries: loadKnowledgeEntries() });
@@ -191,7 +219,8 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
   const bootstrap = openBootstrap({ db, clock });
   bootstrap.seedPack(pack);
 
-  // 唯一调度器：课包推送（每 tick 检查，完成预学才推下一课）+ 定时备份 + 解锁队列过期清理。
+  // 唯一调度器：课包推送（每 tick 检查，完成预学才推下一课）+ 定时备份 +
+  // 解锁队列过期清理 + RSS 轮询（issue #11）。
   // 票 04 的额度入账是查询时惰性结算，调度器不重复实现其 tick（ADR-0016）。
   const scheduler = openScheduler({
     db,
@@ -201,6 +230,13 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
         id: "bootstrap-push",
         intervalMs: 0,
         run: () => void bootstrap.pushNextLesson(language),
+      },
+      {
+        id: "rss-poll",
+        intervalMs: RSS_POLL_INTERVAL_MS,
+        run: (now: number) => {
+          void rss.poll(now);
+        },
       },
       {
         id: "backup",
@@ -289,6 +325,7 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
                 bootstrap,
                 pipeline,
                 language,
+                rss,
               });
             } catch (error) {
               if (error instanceof SystemUrlIntentError) {

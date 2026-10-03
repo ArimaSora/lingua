@@ -79,6 +79,7 @@ export type {
   ContentPipeline,
   ContentPipelineOptions,
   ContentSimplifier,
+  IngestProvidedInput,
   IngestResult,
 } from "./content-pipeline";
 export { MIGRATION_VERSIONS, migrate, openDatabase, SCHEMA_VERSION } from "./database";
@@ -171,6 +172,17 @@ export type { PfaParams } from "./pfa";
 export type { ChunkMastery, Projection, ProjectionMode, SkillMastery } from "./projection";
 export { DEFAULT_SCAFFOLDING_TIER, parseScaffoldingTier, SCAFFOLDING_TIERS, scaffoldingPolicy } from "./scaffolding";
 export type { L1Rescue, ScaffoldingPolicy, ScaffoldingTier } from "./scaffolding";
+export { openRssSubscriptions, parseRssFeed } from "./rss-subscriptions";
+export type {
+  FeedKind,
+  RssEntry,
+  RssFetcher,
+  RssParser,
+  RssPollReport,
+  RssSubscriptions,
+  RssSubscriptionsOptions,
+  StoredFeed,
+} from "./rss-subscriptions";
 export { openScheduler } from "./scheduler";
 export type { Scheduler, SchedulerOptions, SchedulerTask, TaskError, TickReport } from "./scheduler";
 export { openUnlockQueue } from "./unlock-queue";
