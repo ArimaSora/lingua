@@ -75,6 +75,18 @@ export { checkConfigPermissions, redactConfig, SECRET_MASK } from "./config-hard
 export type { ConfigPermissionReport, ConfigPermissionStatus } from "./config-hardening";
 export { MIGRATION_VERSIONS, migrate, openDatabase, SCHEMA_VERSION } from "./database";
 export type { Database } from "./database";
+export { heuristicPerishability, openDifficultyPipeline } from "./difficulty";
+export type {
+  CoarseBand,
+  CoarseGrader,
+  DifficultyAssessment,
+  DifficultyInput,
+  DifficultyPipeline,
+  DifficultyPipelineOptions,
+  Perishability,
+  PerishabilityTagger,
+  Wordlist,
+} from "./difficulty";
 export { renderDigest } from "./digest";
 export type { Digest, DigestOptions } from "./digest";
 export { openExplanationLog } from "./explanation-log";
