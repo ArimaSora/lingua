@@ -2,7 +2,7 @@ import { DatabaseSync } from "node:sqlite";
 
 export type Database = DatabaseSync;
 
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 
 export function openDatabase(path: string): Database {
   const db = new DatabaseSync(path);
@@ -21,6 +21,8 @@ type Migration = {
 // Schema v2：chunk_occurrences——语块实体与其在内容中的出现记录分离（issue #2）。
 // Schema v3：admission_accounts——额度账户（ADR-0016），入账惰性结算只存
 // 结算进度（last_settled_day）与余额，速率由有效学习历史实时推导。
+// Schema v5：bootstrap_lessons + scheduler_tasks——Bootstrap 课包推送状态
+// 与调度器周期任务 last_run_at（issue #6）。
 // 全部按语言隔离，user_id 预留。
 const MIGRATIONS: Migration[] = [
   {
@@ -214,6 +216,45 @@ const MIGRATIONS: Migration[] = [
       );
       CREATE INDEX idx_messages_contact
         ON messages (language, contact, created_at, id);
+    `,
+  },
+  {
+    version: 5,
+    // Bootstrap 课包与调度器（issue #6）：bootstrap_lessons 存课的行级状态
+    // （pending → pushed → prelearned），chunks 为课包给出的语块描述 JSON，
+    // chunk_ids / message_id 在推送时回填；content 本体落在 content_items
+    // （同 id），语块 source_content_id 指向它。scheduler_tasks 持久化周期
+    // 任务的 last_run_at，间隔跨重启有效；入账不在此（票 04 惰性结算）。
+    sql: `
+      CREATE TABLE bootstrap_lessons (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL DEFAULT 'local',
+        language TEXT NOT NULL,
+        pack_id TEXT NOT NULL,
+        seq INTEGER NOT NULL,
+        title TEXT NOT NULL,
+        kind TEXT NOT NULL
+          CHECK (kind IN ('survival-chunks', 'sentence-patterns', 'graded-text')),
+        hook TEXT NOT NULL,
+        body TEXT NOT NULL,
+        chunks TEXT NOT NULL,
+        chunk_ids TEXT,
+        message_id TEXT,
+        status TEXT NOT NULL DEFAULT 'pending'
+          CHECK (status IN ('pending', 'pushed', 'prelearned')),
+        pushed_at INTEGER,
+        prelearned_at INTEGER,
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX idx_bootstrap_lessons_pack
+        ON bootstrap_lessons (user_id, language, pack_id, seq);
+
+      CREATE TABLE scheduler_tasks (
+        user_id TEXT NOT NULL DEFAULT 'local',
+        task_id TEXT NOT NULL,
+        last_run_at INTEGER NOT NULL,
+        PRIMARY KEY (user_id, task_id)
+      );
     `,
   },
 ];

@@ -37,8 +37,8 @@ commands:
   process.exit(1);
 }
 
-// 票 06 集成点：调度器建成后，应直接调用 @lingua/core 的 runBackup
-// （sourcePath/backupDir 取下值，keepLast 为保留策略，clock 注入），
+// 定时备份由票 06 的唯一调度器驱动（serve 时每日一次，直接调用 @lingua/core
+// 的 runBackup，sourcePath/backupDir 取数据目录，keepLast 同为 7）；
 // 本 backup 子命令只是同一入口的手工触发器，壳内不另建调度逻辑。
 const DEFAULT_KEEP_LAST = 7;
 

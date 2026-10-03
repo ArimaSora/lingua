@@ -3,12 +3,14 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { MockLanguageModelV4 } from "ai/test";
+import { openEventStore, SystemClock } from "@lingua/core";
 import { TRANSLATION_MARKER } from "../src/agent";
 import { startServer } from "../src/server";
 
-// 假模型 e2e 冒烟（issue #5）：无 API key 环境下证明完整链路——
+// 假模型 e2e 冒烟（issue #5 + #6）：无 API key 环境下证明完整链路——
 // 双联系人列表、工具循环（remember_fact 写策展事实）、digest 注入下一轮 prompt、
-// 翻译标记拆分与可展开渲染数据、系统联系人纯工具文案、SQLite 持久化（跨重启）。
+// 翻译标记拆分与可展开渲染数据、系统联系人纯工具文案、SQLite 持久化（跨重启）、
+// Bootstrap 课包推送（调度器 tick）与预学完成闭环。
 // 运行：pnpm --filter @lingua/shell smoke
 
 const dir = mkdtempSync(join(tmpdir(), "lingua-smoke-"));
@@ -96,6 +98,21 @@ try {
     assert.match(html, /中文翻译/);
   });
 
+  await check("启动即推送 Bootstrap 第一课：钩子 + 可展开预学清单标记 + 正文", async () => {
+    const messages = await getJson(`${api}/api/messages?contact=system`);
+    assert.equal(messages.length, 2, "欢迎文案 + 第一课推送");
+    assert.match(messages[0].text, /系统已上线/);
+    const push = messages[1];
+    assert.equal(push.role, "assistant");
+    assert.match(push.text, /【Bootstrap 课包 · 第 1\/5 课】First contact/);
+    assert.match(push.text, /为什么你会感兴趣：/);
+    assert.match(push.text, /\[\[预学清单\]\]/);
+    assert.match(push.text, /how's it going/);
+    assert.match(push.text, /例句：/);
+    assert.match(push.text, /直觉规律：/);
+    assert.match(push.text, /Nice to meet you!/);
+  });
+
   await check("一轮完整对话：工具循环 + 翻译拆分", async () => {
     const reply = await postJson(`${api}/api/messages`, {
       contact: "companion",
@@ -131,8 +148,35 @@ try {
     assert.match(reply.text, /工具通道/);
     assert.equal(callCount, 2, "系统会话不得经过模型");
     const messages = await getJson(`${api}/api/messages?contact=system`);
-    assert.equal(messages.length, 3, "欢迎文案 + 用户消息 + 系统回复");
+    assert.equal(messages.length, 4, "欢迎文案 + 第一课推送 + 用户消息 + 系统回复");
     assert.match(messages[0].text, /系统已上线/);
+  });
+
+  await check("预学完成闭环：回「完成」记 initial-learning，tick 推下一课", async () => {
+    const reply = await postJson(`${api}/api/messages`, {
+      contact: "system",
+      text: "完成",
+    });
+    assert.equal(reply.role, "assistant");
+    assert.match(reply.text, /已记录预学：5 个语块/);
+    assert.equal(callCount, 2, "预学完成不经过模型");
+
+    const belief = openEventStore({ db: server!.db, clock: new SystemClock() }).currentBeliefAt(
+      Date.now(),
+    );
+    const initial = belief.chunks.filter((chunk) => chunk.lastEventType === "initial-learning");
+    assert.equal(initial.length, 5, "第一课 5 个语块各记一条 initial-learning");
+    assert.ok(
+      initial.every((chunk) => chunk.admittedEvidence === 0 && chunk.reps === 0),
+      "预学不冒充成功回忆、不更新掌握度（ADR-0016）",
+    );
+
+    // 调度器 tick：上一课预学完成 → 推送第二课。
+    const report = server!.scheduler.tick();
+    assert.ok(report.ran.includes("bootstrap-push"));
+    const messages = await getJson(`${api}/api/messages?contact=system`);
+    assert.equal(messages.length, 7, "再 + 用户「完成」+ 完成回执 + 第二课推送");
+    assert.match(messages[6].text, /【Bootstrap 课包 · 第 2\/5 课】日常救场/);
   });
 
   await check("工具写入的策展事实经 digest 注入下一轮 prompt", async () => {
@@ -153,7 +197,14 @@ try {
       assert.equal(messages.length, 4, "两轮对话的消息应全部保留");
       assert.equal(messages[1].translation, REPLY_TRANSLATION);
       const system = await getJson(`${base(reopened.port)}/api/messages?contact=system`);
-      assert.equal(system.length, 3, "系统会话不重复播种欢迎文案");
+      assert.equal(system.length, 7, "系统会话不重复播种欢迎文案，课包不重复推送");
+      // 重启后 tick：第二课仍待预学完成，不推新课；备份按间隔节流。
+      const report = reopened.scheduler.tick();
+      assert.equal(
+        system.length,
+        (await getJson(`${base(reopened.port)}/api/messages?contact=system`)).length,
+        `重启 tick 不应推新课（ran: ${report.ran.join(",")}）`,
+      );
     } finally {
       await reopened.close();
       server = undefined;
