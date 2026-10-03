@@ -118,6 +118,19 @@ export type {
   MessageStore,
   MessageStoreOptions,
 } from "./message-store";
+export { buildJudgePrompt, createJudge } from "./judge";
+export type {
+  Judge,
+  JudgeOptions,
+  JudgeRequest,
+  JudgeTarget,
+  JudgeVerdict,
+  UsageJudge,
+  UsageJudgeInput,
+  UsageVerdict,
+} from "./judge";
+export { AMBUSH_HIT_METRIC, recordMetric, TOPIC_RESPONSE_METRIC } from "./metrics";
+export type { MetricInput, MetricName } from "./metrics";
 export { DEFAULT_PFA_PARAMS, pfaMastery } from "./pfa";
 export type { PfaParams } from "./pfa";
 export type { ChunkMastery, Projection, ProjectionMode, SkillMastery } from "./projection";

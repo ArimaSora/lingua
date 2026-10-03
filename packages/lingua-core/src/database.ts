@@ -2,7 +2,7 @@ import { DatabaseSync } from "node:sqlite";
 
 export type Database = DatabaseSync;
 
-export const SCHEMA_VERSION = 6;
+export const SCHEMA_VERSION = 7;
 
 export function openDatabase(path: string): Database {
   const db = new DatabaseSync(path);
@@ -25,8 +25,13 @@ type Migration = {
 // 与调度器周期任务 last_run_at（issue #6）。
 // Schema v6：explanation_refs——讲解投递记录，可追溯到知识条目 ID 与证据
 // 等级（issue #12）。
+// Schema v7：ambush_topics + ambush_placements——埋伏式复习的话题与埋伏记录
+// （issue #7）：每话题埋 2–4 个到期语块，同语块 48h 内最多埋 2 次（按
+// placements 落库时间窗判定），未命中回炉重排。prompt 留存话题生成提示原文，
+// 供「不泄题」规则审计。
 // 全部按语言隔离，user_id 预留。
-// 版本号占位协调：v5 归票 06（并发施工）；v6 归本票（issue #12）。
+// 版本号占位协调：v5 归票 06（并发施工）；v6 归票 12；v7 归本票（issue #7）；
+// v8 归票 10（并发施工）。
 const MIGRATIONS: Migration[] = [
   {
     version: 1,
@@ -280,6 +285,40 @@ const MIGRATIONS: Migration[] = [
       );
       CREATE INDEX idx_explanation_refs_message
         ON explanation_refs (message_id, created_at, id);
+    `,
+  },
+  {
+    version: 7,
+    // 埋伏式复习（issue #7）：ambush_topics = 一次主动起话题（open → resolved /
+    // stale）；ambush_placements = 话题里埋入的每个到期语块及其结算
+    // （hit = 独立产出，missed = 其余一切，未命中回炉重排）。
+    sql: `
+      CREATE TABLE ambush_topics (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL DEFAULT 'local',
+        language TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'open'
+          CHECK (status IN ('open', 'resolved', 'stale')),
+        topic_text TEXT NOT NULL,
+        prompt TEXT NOT NULL,
+        opened_at INTEGER NOT NULL,
+        closed_at INTEGER
+      );
+      CREATE INDEX idx_ambush_topics_status
+        ON ambush_topics (user_id, language, status, opened_at);
+
+      CREATE TABLE ambush_placements (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL DEFAULT 'local',
+        language TEXT NOT NULL,
+        topic_id TEXT NOT NULL REFERENCES ambush_topics (id),
+        chunk_id TEXT NOT NULL REFERENCES chunks (id),
+        buried_at INTEGER NOT NULL,
+        resolved_at INTEGER,
+        outcome TEXT CHECK (outcome IN ('hit', 'missed'))
+      );
+      CREATE INDEX idx_ambush_placements_chunk
+        ON ambush_placements (chunk_id, buried_at);
     `,
   },
 ];

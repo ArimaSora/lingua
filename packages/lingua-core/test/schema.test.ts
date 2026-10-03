@@ -16,6 +16,8 @@ describe("schema", () => {
     expect(tables).toEqual(
       expect.arrayContaining([
         "admission_accounts",
+        "ambush_placements",
+        "ambush_topics",
         "bootstrap_lessons",
         "character_cards",
         "chunk_occurrences",
@@ -114,6 +116,43 @@ describe("schema", () => {
       .map((row) => (row as { name: string }).name);
     for (const column of ["task_id", "last_run_at"]) {
       expect(taskColumns).toContain(column);
+    }
+  });
+
+  it("tracks ambush topics and placements (issue #7)", () => {
+    const db = openDatabase(":memory:");
+    migrate(db);
+
+    const topicColumns = db
+      .prepare("PRAGMA table_info(ambush_topics)")
+      .all()
+      .map((row) => (row as { name: string }).name);
+    for (const column of [
+      "status",
+      "topic_text",
+      "prompt",
+      "opened_at",
+      "closed_at",
+      "user_id",
+      "language",
+    ]) {
+      expect(topicColumns).toContain(column);
+    }
+
+    const placementColumns = db
+      .prepare("PRAGMA table_info(ambush_placements)")
+      .all()
+      .map((row) => (row as { name: string }).name);
+    for (const column of [
+      "topic_id",
+      "chunk_id",
+      "buried_at",
+      "resolved_at",
+      "outcome",
+      "user_id",
+      "language",
+    ]) {
+      expect(placementColumns).toContain(column);
     }
   });
 });
