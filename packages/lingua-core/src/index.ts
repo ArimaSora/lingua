@@ -1,3 +1,5 @@
+export { restoreBackup, runBackup } from "./backup";
+export type { BackupOptions, BackupResult, RestoreOptions } from "./backup";
 export { matchChunks } from "./chunk-matching";
 export type {
   ChunkDescriptor,
@@ -19,6 +21,8 @@ export type {
 } from "./chunk-store";
 export { FakeClock, SystemClock } from "./clock";
 export type { Clock } from "./clock";
+export { checkConfigPermissions, redactConfig, SECRET_MASK } from "./config-hardening";
+export type { ConfigPermissionReport, ConfigPermissionStatus } from "./config-hardening";
 export { migrate, openDatabase, SCHEMA_VERSION } from "./database";
 export type { Database } from "./database";
 export { renderDigest } from "./digest";
