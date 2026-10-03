@@ -9,6 +9,7 @@ import {
   loadKnowledgeEntries,
   migrate,
   openBootstrap,
+  openContentPipeline,
   openDatabase,
   openEventStore,
   openExplanationLog,
@@ -19,13 +20,28 @@ import {
   runBackup,
   SystemClock,
   type CharacterCard,
+  type ContentExtractor,
+  type ContentPipeline,
+  type ContentSimplifier,
+  type CoarseGrader,
   type Database,
+  type PerishabilityTagger,
   type Scheduler,
+  type Wordlist,
 } from "@lingua/core";
 import { createCompanionAgent, type CompanionAgent } from "./agent";
+import { createReadabilityExtractor } from "./content-extractor";
 import { loadConfig, resolveHome } from "./config";
-import { handleSystemMessage, SYSTEM_CONTACT_NAME, SYSTEM_WELCOME } from "./system-contact";
 import { dataDir } from "./data-dir";
+import { createMainSimplifier } from "./simplifier";
+import {
+  formatIngestReply,
+  handleSystemMessage,
+  SystemUrlIntentError,
+  SYSTEM_CONTACT_NAME,
+  SYSTEM_WELCOME,
+} from "./system-contact";
+import { loadEfllexWordlist } from "./wordlist-loader";
 
 // Web Chat 壳（issue #5）：IM 界面 + JSON API，直连 agent loop（ADR-0017）。
 // 静态页为无构建步骤的原生 HTML/JS，消息经 lingua-core message store 持久化。
@@ -40,6 +56,12 @@ export type StartServerOptions = {
   model?: LanguageModel;
   cardPath?: string;
   packPath?: string;
+  // 内容管道依赖可注入，便于 e2e 控制。
+  extractor?: ContentExtractor;
+  simplifier?: ContentSimplifier;
+  wordlist?: Wordlist;
+  grader?: CoarseGrader | null;
+  tagger?: PerishabilityTagger | null;
 };
 
 export type RunningServer = {
@@ -48,6 +70,8 @@ export type RunningServer = {
   card: CharacterCard;
   // 唯一调度器（issue #6）：课包推送与定时备份的 tick 入口，e2e 可手动驱动。
   scheduler: Scheduler;
+  // 票 10：内容管道入口，供测试/CLI 直接检查分流结果。
+  pipeline: ContentPipeline;
   close(): Promise<void>;
 };
 
@@ -60,6 +84,8 @@ const DEFAULT_PACK = fileURLToPath(new URL("../packs/en-bootstrap-a1.json", impo
 const TICK_INTERVAL_MS = 60_000;
 const BACKUP_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const BACKUP_KEEP_LAST = 7;
+// 解锁队列过期清理：每日一次（issue #10）。
+const UNLOCK_QUEUE_EXPIRE_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
 function readCard(cardPath: string | undefined, dir: string): unknown {
   const candidates = cardPath ? [resolveHome(cardPath)] : [join(dir, "companion.json")];
@@ -123,6 +149,32 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
     store.append({ language, contact: "system", role: "assistant", text: SYSTEM_WELCOME });
   }
 
+  // 内容管道（issue #10）：无 key 时 simplifier 抛错，pipeline 自动降级为解锁队列。
+  const extractor = options.extractor ?? createReadabilityExtractor();
+  const simplifier =
+    options.simplifier ??
+    (() => {
+      try {
+        return createMainSimplifier(options.model ?? buildModel(options.configPath));
+      } catch {
+        // 优雅降级：缺少模型配置时无法改写，难文全部进解锁队列。
+        return async () => {
+          throw new Error("未配置主模型，无法生成简化版");
+        };
+      }
+    })();
+  const wordlist = options.wordlist ?? loadEfllexWordlist(dir);
+  const pipeline = openContentPipeline({
+    db,
+    clock,
+    language,
+    extractor,
+    simplifier,
+    wordlist,
+    grader: options.grader,
+    tagger: options.tagger,
+  });
+
   const model = options.model ?? buildModel(options.configPath);
   // 知识条目库（issue #12）：随包种子内容，启动时加载并全量校验。
   const knowledge = openKnowledgeStore({ entries: loadKnowledgeEntries() });
@@ -139,7 +191,7 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
   const bootstrap = openBootstrap({ db, clock });
   bootstrap.seedPack(pack);
 
-  // 唯一调度器：课包推送（每 tick 检查，完成预学才推下一课）+ 定时备份。
+  // 唯一调度器：课包推送（每 tick 检查，完成预学才推下一课）+ 定时备份 + 解锁队列过期清理。
   // 票 04 的额度入账是查询时惰性结算，调度器不重复实现其 tick（ADR-0016）。
   const scheduler = openScheduler({
     db,
@@ -160,6 +212,13 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
             keepLast: BACKUP_KEEP_LAST,
             clock,
           });
+        },
+      },
+      {
+        id: "unlock-queue-expire",
+        intervalMs: UNLOCK_QUEUE_EXPIRE_INTERVAL_MS,
+        run: () => {
+          pipeline.expireUnlockQueue();
         },
       },
     ],
@@ -223,11 +282,27 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
           }
           if (body.contact === "system") {
             store.append({ language, contact: "system", role: "user", text: body.text.trim() });
+            let replyText: string;
+            try {
+              replyText = handleSystemMessage({
+                text: body.text.trim(),
+                bootstrap,
+                pipeline,
+                language,
+              });
+            } catch (error) {
+              if (error instanceof SystemUrlIntentError) {
+                const result = await pipeline.ingest({ url: error.url });
+                replyText = formatIngestReply(result);
+              } else {
+                throw error;
+              }
+            }
             const reply = store.append({
               language,
               contact: "system",
               role: "assistant",
-              text: handleSystemMessage({ text: body.text.trim(), bootstrap, language }),
+              text: replyText,
             });
             json(res, 200, reply);
             return;
@@ -253,6 +328,7 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
     db,
     card,
     scheduler,
+    pipeline,
     close: () =>
       new Promise<void>((resolveClose, rejectClose) => {
         clearInterval(tickTimer);

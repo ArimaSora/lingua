@@ -73,8 +73,28 @@ export { FakeClock, SystemClock } from "./clock";
 export type { Clock } from "./clock";
 export { checkConfigPermissions, redactConfig, SECRET_MASK } from "./config-hardening";
 export type { ConfigPermissionReport, ConfigPermissionStatus } from "./config-hardening";
+export { openContentPipeline } from "./content-pipeline";
+export type {
+  ContentExtractor,
+  ContentPipeline,
+  ContentPipelineOptions,
+  ContentSimplifier,
+  IngestResult,
+} from "./content-pipeline";
 export { MIGRATION_VERSIONS, migrate, openDatabase, SCHEMA_VERSION } from "./database";
 export type { Database } from "./database";
+export { heuristicPerishability, openDifficultyPipeline } from "./difficulty";
+export type {
+  CoarseBand,
+  CoarseGrader,
+  DifficultyAssessment,
+  DifficultyInput,
+  DifficultyPipeline,
+  DifficultyPipelineOptions,
+  Perishability,
+  PerishabilityTagger,
+  Wordlist,
+} from "./difficulty";
 export { renderDigest } from "./digest";
 export type { Digest, DigestOptions } from "./digest";
 export { openExplanationLog } from "./explanation-log";
@@ -153,3 +173,5 @@ export { DEFAULT_SCAFFOLDING_TIER, parseScaffoldingTier, SCAFFOLDING_TIERS, scaf
 export type { L1Rescue, ScaffoldingPolicy, ScaffoldingTier } from "./scaffolding";
 export { openScheduler } from "./scheduler";
 export type { Scheduler, SchedulerOptions, SchedulerTask, TaskError, TickReport } from "./scheduler";
+export { openUnlockQueue } from "./unlock-queue";
+export type { UnlockQueue, UnlockQueueItem, UnlockQueueOptions } from "./unlock-queue";
