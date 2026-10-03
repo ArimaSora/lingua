@@ -15,28 +15,6 @@ importers:
         specifier: ^5.9.2
         version: 5.9.3
 
-  W:/projects/lingua/packages/lingua-core:
-    dependencies:
-      ts-fsrs:
-        specifier: ^5.2.3
-        version: 5.4.2
-      ulid:
-        specifier: ^3.0.1
-        version: 3.0.2
-      wink-lemmatizer:
-        specifier: ^3.0.4
-        version: 3.0.4
-    devDependencies:
-      '@types/node':
-        specifier: ^24.3.0
-        version: 24.19.0
-      typescript:
-        specifier: ^5.9.2
-        version: 5.9.3
-      vitest:
-        specifier: ^3.2.4
-        version: 3.2.7(@types/node@24.19.0)(tsx@4.23.15)
-
   apps/shell:
     dependencies:
       '@lingua/core':
@@ -58,6 +36,9 @@ importers:
       ulid:
         specifier: ^3.0.1
         version: 3.0.2
+      wink-lemmatizer:
+        specifier: ^3.0.4
+        version: 3.0.4
     devDependencies:
       '@types/node':
         specifier: ^24.3.0
