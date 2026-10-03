@@ -2,6 +2,8 @@ import type { FSRSParameters } from "ts-fsrs";
 import { generatorParameters } from "ts-fsrs";
 import type { Clock } from "./clock";
 import type { Database } from "./database";
+import { DEFAULT_PFA_PARAMS } from "./pfa";
+import type { PfaParams } from "./pfa";
 import { projectState } from "./projection";
 import type { Projection } from "./projection";
 
@@ -9,12 +11,14 @@ export type Assistance = "none" | "assisted";
 export type Outcome = "correct" | "wrong" | "not-produced";
 
 // ADR-0013 事件类型：独立产出 / 独立尝试失败 / 辅助产出 / 辅助尝试失败 / 未获得证据。
+// ADR-0016 增补：预学完成单独记录 initial-learning，不冒充成功回忆。
 export type EventType =
   | "independent-production"
   | "independent-attempt-failed"
   | "assisted-production"
   | "assisted-attempt-failed"
   | "no-evidence"
+  | "initial-learning"
   | "void";
 
 export type FsrsRating = "again" | "good";
@@ -63,6 +67,7 @@ export type LearningEvent = {
 export type LinguaParams = {
   confidenceThreshold: number;
   fsrs: FSRSParameters;
+  pfa: PfaParams;
 };
 
 export function defaultParams(): LinguaParams {
@@ -70,6 +75,7 @@ export function defaultParams(): LinguaParams {
     confidenceThreshold: 0.7,
     // 回放必须确定性：禁用 fuzz。
     fsrs: generatorParameters({ enable_fuzz: false }),
+    pfa: DEFAULT_PFA_PARAMS,
   };
 }
 
@@ -77,6 +83,13 @@ const DEFAULT_SNAPSHOT_ID = "params-v1";
 
 export type EventStore = {
   recordEvidence(evidence: Evidence): LearningEvent;
+  // 预学完成（ADR-0016）：初次学习单独记录，不更新掌握度；
+  // 首次到期 = 预学次日，首次 FSRS 评分来自首次真实回忆。
+  recordInitialLearning(input: {
+    observationId: string;
+    chunkId: string;
+    occurredAt?: number;
+  }): LearningEvent;
   // 纠错 = 追加撤销事件（ADR-0014 规则 3），不修改原记录；
   // 撤销以 recorded_at 进入时间线。
   voidObservation(input: { observationId: string; reason?: string }): LearningEvent;
@@ -239,12 +252,12 @@ export function openEventStore(options: EventStoreOptions): EventStore {
 
     const derived = deriveFromEvidence(evidence);
     // applied 必须由事件引用的那份参数快照推导（ADR-0014 审计一致性）。
-    // v1 唯一的状态消费者是 FSRS 记忆状态：PFA 无状态表，故 pfa-only 事件
-    // （辅助×失败）applied = false；pfa_outcome 仍派生落库，供后续 PFA 票使用。
+    // 状态消费者 = FSRS 记忆状态 + PFA 掌握度：携带任一更新载荷
+    // （fsrs_rating 或 pfa_outcome）且置信度达标即 applied。
     const snapshot = latestSnapshot(db);
     const applied =
       evidence.confidence >= snapshot.params.confidenceThreshold &&
-      derived.fsrsRating !== null;
+      (derived.fsrsRating !== null || derived.pfaOutcome !== null);
     const tip = latestVersion.get(evidence.observationId) as
       | { event_id: string }
       | undefined;
@@ -271,6 +284,52 @@ export function openEventStore(options: EventStoreOptions): EventStore {
       fsrs_rating: derived.fsrsRating,
       pfa_outcome: derived.pfaOutcome,
       applied: applied ? 1 : 0,
+      supersedes_event_id: tip?.event_id ?? null,
+      voids_event_id: null,
+      void_reason: null,
+    };
+
+    insertEventRow(row);
+
+    return rowToLearningEvent(row);
+  }
+
+  function recordInitialLearning(input: {
+    observationId: string;
+    chunkId: string;
+    occurredAt?: number;
+  }): LearningEvent {
+    const chunk = getChunk.get(input.chunkId) as { language: string } | undefined;
+    if (!chunk) {
+      throw new Error(`unknown chunk: ${input.chunkId}`);
+    }
+
+    const snapshot = latestSnapshot(db);
+    const tip = latestVersion.get(input.observationId) as
+      | { event_id: string }
+      | undefined;
+
+    const recordedAt = clock.now();
+    const row: EventRow = {
+      event_id: clock.newId(),
+      user_id: userId,
+      language: chunk.language,
+      observation_id: input.observationId,
+      chunk_id: input.chunkId,
+      occurred_at: input.occurredAt ?? recordedAt,
+      recorded_at: recordedAt,
+      topic_id: null,
+      quote: null,
+      assistance: null,
+      outcome: null,
+      event_type: "initial-learning",
+      confidence: null,
+      judge_name: null,
+      judge_version: null,
+      params_version: snapshot.id,
+      fsrs_rating: null,
+      pfa_outcome: null,
+      applied: 1,
       supersedes_event_id: tip?.event_id ?? null,
       voids_event_id: null,
       void_reason: null,
@@ -338,6 +397,7 @@ export function openEventStore(options: EventStoreOptions): EventStore {
 
   return {
     recordEvidence,
+    recordInitialLearning,
     voidObservation,
     asKnownAt: (horizon: number) => projectState(db, "as-known", horizon),
     currentBeliefAt: (horizon: number) => projectState(db, "current-belief", horizon),

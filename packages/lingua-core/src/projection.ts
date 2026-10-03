@@ -4,6 +4,11 @@ import type { Database } from "./database";
 import type { EventType, LinguaParams } from "./event-store";
 import { rowToLearningEvent } from "./event-store";
 import type { LearningEvent } from "./event-store";
+import { DEFAULT_PFA_PARAMS, pfaMastery } from "./pfa";
+import type { PfaParams } from "./pfa";
+
+// ADR-0016：首次到期 = 预学次日。
+export const INITIAL_REVIEW_DELAY_MS = 24 * 60 * 60 * 1000;
 
 export type ProjectionMode = "as-known" | "current-belief";
 
@@ -20,11 +25,20 @@ export type ChunkMastery = {
   admittedEvidence: number;
 };
 
+export type SkillMastery = {
+  // v1 的技能点（KC）= 语块本身（见 pfa.ts）。
+  skillId: string;
+  successes: number;
+  failures: number;
+  mastery: number;
+};
+
 export type Projection = {
   mode: ProjectionMode;
   horizon: number;
   paramsVersion: string;
   chunks: ChunkMastery[];
+  skills: SkillMastery[];
 };
 
 type SnapshotRow = { id: string; params: string };
@@ -99,8 +113,14 @@ function resolveAdmitted(
     );
     const effective = chain.find((event) => !voided.has(event.eventId));
     if (!effective) continue;
+    // initial-learning 不是判分证据：无置信度可门槛，矩阵准入直接放行（ADR-0016）。
+    if (effective.eventType === "initial-learning") {
+      admitted.push(effective);
+      continue;
+    }
     if (effective.confidence === null || effective.confidence < threshold) continue;
-    if (effective.fsrsRating === null) continue;
+    // 矩阵准入：只放行携带状态更新载荷（FSRS 评分或 PFA 结果）的事件。
+    if (effective.fsrsRating === null && effective.pfaOutcome === null) continue;
     admitted.push(effective);
   }
 
@@ -120,40 +140,84 @@ const STATE_NAMES = ["new", "learning", "review", "relearning"] as const;
 export function projectState(db: Database, mode: ProjectionMode, horizon: number): Projection {
   const snapshot = snapshotFor(db, mode, horizon);
   const params = JSON.parse(snapshot.params) as LinguaParams;
+  const pfaParams: PfaParams = params.pfa ?? DEFAULT_PFA_PARAMS;
   const admitted = resolveAdmitted(db, mode, horizon, params.confidenceThreshold);
 
   const fsrs = new FSRS(params.fsrs as FSRSParameters);
   const cards = new Map<string, Card>();
   const mastery = new Map<string, ChunkMastery>();
+  const pfaCounts = new Map<string, { successes: number; failures: number }>();
 
   for (const event of admitted) {
-    if (!event.chunkId || !event.fsrsRating) continue;
-    const card: Card = cards.get(event.chunkId) ?? createEmptyCard(new Date(event.occurredAt));
-    const scheduled = fsrs.repeat(card, new Date(event.occurredAt));
-    const item = scheduled[event.fsrsRating === "good" ? Rating.Good : Rating.Again];
-    if (!item) throw new Error(`no scheduling record for rating ${event.fsrsRating}`);
-    const next = item.card;
-    cards.set(event.chunkId, next);
+    if (!event.chunkId) continue;
 
-    const previous = mastery.get(event.chunkId);
-    mastery.set(event.chunkId, {
-      chunkId: event.chunkId,
-      state: STATE_NAMES[next.state as number] ?? "new",
-      stability: next.stability,
-      difficulty: next.difficulty,
-      reps: next.reps,
-      lapses: next.lapses,
-      dueAt: next.due.getTime(),
-      lastReviewAt: next.last_review ? next.last_review.getTime() : null,
-      lastEventType: event.eventType,
-      admittedEvidence: (previous?.admittedEvidence ?? 0) + 1,
-    });
+    // 初次学习单独记录（ADR-0016）：建立新卡片、首次到期 = 预学次日，
+    // 不冒充成功回忆（无评分、不计 admittedEvidence）、不更新掌握度。
+    if (event.eventType === "initial-learning") {
+      if (cards.has(event.chunkId)) continue;
+      const card = createEmptyCard(new Date(event.occurredAt));
+      card.due = new Date(event.occurredAt + INITIAL_REVIEW_DELAY_MS);
+      cards.set(event.chunkId, card);
+      mastery.set(event.chunkId, {
+        chunkId: event.chunkId,
+        state: "new",
+        stability: card.stability,
+        difficulty: card.difficulty,
+        reps: 0,
+        lapses: 0,
+        dueAt: card.due.getTime(),
+        lastReviewAt: null,
+        lastEventType: event.eventType,
+        admittedEvidence: mastery.get(event.chunkId)?.admittedEvidence ?? 0,
+      });
+      continue;
+    }
+
+    if (event.fsrsRating) {
+      const card: Card = cards.get(event.chunkId) ?? createEmptyCard(new Date(event.occurredAt));
+      const scheduled = fsrs.repeat(card, new Date(event.occurredAt));
+      const item = scheduled[event.fsrsRating === "good" ? Rating.Good : Rating.Again];
+      if (!item) throw new Error(`no scheduling record for rating ${event.fsrsRating}`);
+      const next = item.card;
+      cards.set(event.chunkId, next);
+
+      const previous = mastery.get(event.chunkId);
+      mastery.set(event.chunkId, {
+        chunkId: event.chunkId,
+        state: STATE_NAMES[next.state as number] ?? "new",
+        stability: next.stability,
+        difficulty: next.difficulty,
+        reps: next.reps,
+        lapses: next.lapses,
+        dueAt: next.due.getTime(),
+        lastReviewAt: next.last_review ? next.last_review.getTime() : null,
+        lastEventType: event.eventType,
+        admittedEvidence: (previous?.admittedEvidence ?? 0) + 1,
+      });
+    }
+
+    if (event.pfaOutcome) {
+      const counts = pfaCounts.get(event.chunkId) ?? { successes: 0, failures: 0 };
+      if (event.pfaOutcome === "success") counts.successes += 1;
+      else counts.failures += 1;
+      pfaCounts.set(event.chunkId, counts);
+    }
   }
+
+  const skills: SkillMastery[] = [...pfaCounts.entries()]
+    .map(([skillId, counts]) => ({
+      skillId,
+      successes: counts.successes,
+      failures: counts.failures,
+      mastery: pfaMastery(pfaParams, counts.successes, counts.failures),
+    }))
+    .sort((a, b) => (a.skillId < b.skillId ? -1 : 1));
 
   return {
     mode,
     horizon,
     paramsVersion: snapshot.id,
     chunks: [...mastery.values()].sort((a, b) => (a.chunkId < b.chunkId ? -1 : 1)),
+    skills,
   };
 }

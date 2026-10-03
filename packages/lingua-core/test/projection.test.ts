@@ -217,3 +217,72 @@ describe("projection (as-of 双模式)", () => {
     expect(store.currentBeliefAt(T0 + DAY).paramsVersion).toBe("params-v2");
   });
 });
+
+describe("initial-learning (ADR-0016)", () => {
+  it("creates a new-state card due the day after pre-learning, without rating it", () => {
+    const { db, store } = makeHarness();
+    insertChunk(db, "chunk-1");
+    store.recordInitialLearning({ observationId: "prelearn-1", chunkId: "chunk-1" });
+
+    const chunk = store
+      .currentBeliefAt(T0 + DAY)
+      .chunks.find((c) => c.chunkId === "chunk-1");
+    expect(chunk).toBeDefined();
+    expect(chunk!.state).toBe("new");
+    expect(chunk!.reps).toBe(0);
+    expect(chunk!.lastReviewAt).toBeNull();
+    // 首次到期 = 预学次日。
+    expect(chunk!.dueAt).toBe(T0 + DAY);
+    expect(chunk!.lastEventType).toBe("initial-learning");
+    // 不冒充成功回忆：不计入有效回忆证据。
+    expect(chunk!.admittedEvidence).toBe(0);
+  });
+
+  it("does not update mastery (no PFA entry) and does not touch an existing card", () => {
+    const { db, clock, store } = makeHarness();
+    insertChunk(db, "chunk-1");
+    store.recordInitialLearning({ observationId: "prelearn-1", chunkId: "chunk-1" });
+
+    // initial-learning 不更新掌握度：没有任何 PFA 证据。
+    expect(store.currentBeliefAt(T0 + DAY).skills).toHaveLength(0);
+
+    // 首次 FSRS 评分来自首次真实回忆事件，不来自预学。
+    clock.set(T0 + 2 * DAY);
+    store.recordEvidence({
+      observationId: "obs-1",
+      chunkId: "chunk-1",
+      assistance: "none",
+      outcome: "correct",
+      confidence: 0.95,
+      quote: "I looked it up",
+    });
+
+    const afterRecall = store
+      .currentBeliefAt(T0 + 3 * DAY)
+      .chunks.find((c) => c.chunkId === "chunk-1");
+    expect(afterRecall!.reps).toBe(1);
+    expect(afterRecall!.state).not.toBe("new");
+
+    // 预学之后再来的 initial-learning（如重复完成课包）不重置卡片。
+    clock.set(T0 + 4 * DAY);
+    store.recordInitialLearning({ observationId: "prelearn-2", chunkId: "chunk-1" });
+    const retrained = store
+      .currentBeliefAt(T0 + 5 * DAY)
+      .chunks.find((c) => c.chunkId === "chunk-1");
+    expect(retrained!.reps).toBe(1);
+    expect(retrained!.lastEventType).toBe("independent-production");
+  });
+
+  it("voiding the pre-learning observation removes the card on replay", () => {
+    const { db, clock, store } = makeHarness();
+    insertChunk(db, "chunk-1");
+    store.recordInitialLearning({ observationId: "prelearn-1", chunkId: "chunk-1" });
+
+    clock.set(T0 + DAY);
+    store.voidObservation({ observationId: "prelearn-1", reason: "误记" });
+
+    expect(store.currentBeliefAt(T0 + 2 * DAY).chunks).toHaveLength(0);
+    // 当时所知（撤销前）仍可见。
+    expect(store.asKnownAt(T0 + 12 * 60 * 60 * 1000).chunks).toHaveLength(1);
+  });
+});

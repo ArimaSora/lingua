@@ -34,8 +34,8 @@ describe("recordEvidence", () => {
       eventType: "assisted-attempt-failed",
       fsrsRating: null,
       pfaOutcome: "failure",
-      // v1 无 PFA 状态表：pfa-only 事件当时不参与任何状态更新。
-      applied: false,
+      // 辅助×失败只记 PFA 不记 FSRS（ADR-0013）；PFA 是状态消费者，故 applied = true。
+      applied: true,
     },
   ])(
     "derives $eventType from $assistance × $outcome (ADR-0013 matrix)",
@@ -59,23 +59,28 @@ describe("recordEvidence", () => {
     },
   );
 
-  it("derives no-evidence from not-produced regardless of assistance", () => {
-    const { db, store } = makeHarness();
-    insertChunk(db, "chunk-1");
+  it.each([undefined, "none", "assisted"] as const)(
+    "derives no-evidence from not-produced regardless of assistance (%s)",
+    (assistance) => {
+      const { db, store } = makeHarness();
+      insertChunk(db, "chunk-1");
 
-    const event = store.recordEvidence({
-      observationId: "obs-1",
-      chunkId: "chunk-1",
-      outcome: "not-produced",
-      confidence: 0.95,
-      quote: "…",
-    });
+      const event = store.recordEvidence({
+        observationId: "obs-1",
+        chunkId: "chunk-1",
+        outcome: "not-produced",
+        ...(assistance === undefined ? {} : { assistance }),
+        confidence: 0.95,
+        quote: "…",
+      });
 
-    expect(event.eventType).toBe("no-evidence");
-    expect(event.fsrsRating).toBeNull();
-    expect(event.pfaOutcome).toBeNull();
-    expect(event.applied).toBe(false);
-  });
+      // 未产出永不记失败（ADR-0013）：不进 FSRS 也不进 PFA。
+      expect(event.eventType).toBe("no-evidence");
+      expect(event.fsrsRating).toBeNull();
+      expect(event.pfaOutcome).toBeNull();
+      expect(event.applied).toBe(false);
+    },
+  );
 
   it("marks low-confidence evidence as not applied (audit only)", () => {
     const { db, store } = makeHarness();
@@ -247,5 +252,34 @@ describe("voidObservation", () => {
     expect(() =>
       store.voidObservation({ observationId: "nope", reason: "…" }),
     ).toThrow(/nope/);
+  });
+});
+
+describe("recordInitialLearning (ADR-0016)", () => {
+  it("records pre-learning completion as its own event type, not a recall success", () => {
+    const { db, store } = makeHarness();
+    insertChunk(db, "chunk-1");
+
+    const event = store.recordInitialLearning({
+      observationId: "prelearn-1",
+      chunkId: "chunk-1",
+    });
+
+    expect(event.eventType).toBe("initial-learning");
+    expect(event.fsrsRating).toBeNull();
+    expect(event.pfaOutcome).toBeNull();
+    expect(event.confidence).toBeNull();
+    expect(event.assistance).toBeNull();
+    expect(event.outcome).toBeNull();
+    // 初次学习参与状态（建立卡片与首次到期），applied 记录这一事实。
+    expect(event.applied).toBe(true);
+    expect(event.paramsVersion).not.toBeNull();
+  });
+
+  it("rejects initial learning for an unknown chunk", () => {
+    const { store } = makeHarness();
+    expect(() =>
+      store.recordInitialLearning({ observationId: "prelearn-1", chunkId: "missing" }),
+    ).toThrow(/missing/);
   });
 });

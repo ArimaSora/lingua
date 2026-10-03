@@ -21,6 +21,8 @@ export { FakeClock, SystemClock } from "./clock";
 export type { Clock } from "./clock";
 export { migrate, openDatabase, SCHEMA_VERSION } from "./database";
 export type { Database } from "./database";
+export { renderDigest } from "./digest";
+export type { Digest, DigestOptions } from "./digest";
 export { defaultParams, openEventStore } from "./event-store";
 export type {
   Assistance,
@@ -36,4 +38,6 @@ export type {
 } from "./event-store";
 export { lemmatizeWord, tokenize } from "./lemmatizer";
 export type { Token } from "./lemmatizer";
-export type { ChunkMastery, Projection, ProjectionMode } from "./projection";
+export { DEFAULT_PFA_PARAMS, pfaMastery } from "./pfa";
+export type { PfaParams } from "./pfa";
+export type { ChunkMastery, Projection, ProjectionMode, SkillMastery } from "./projection";
