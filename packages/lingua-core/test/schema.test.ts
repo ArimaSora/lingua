@@ -12,6 +12,7 @@ describe("schema", () => {
       .map((row) => (row as { name: string }).name);
 
     expect(tables).toEqual([
+      "admission_accounts",
       "character_cards",
       "chunk_occurrences",
       "chunks",

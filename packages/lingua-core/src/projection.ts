@@ -66,31 +66,41 @@ type VersionRow = Parameters<typeof rowToLearningEvent>[0];
 
 // ADR-0014 规则 5 统一管线：时间截点 → 有效版本 → 置信度与矩阵准入 → 投影。
 // 有效版本 = 截至知识地平线最新且未被撤销的版本；低置信度不回溯旧版本。
+// language 给定时按语言隔离（spec 数据 schema：全部按语言隔离）。
 function resolveAdmitted(
   db: Database,
   mode: ProjectionMode,
   horizon: number,
   threshold: number,
+  language?: string,
 ): LearningEvent[] {
+  const languageFilter = language ? " AND language = ?" : "";
+  const horizonArgs = language ? [horizon, language] : [horizon];
   const versions =
     mode === "as-known"
       ? (db
-          .prepare("SELECT * FROM events WHERE event_type != 'void' AND recorded_at <= ?")
-          .all(horizon) as unknown as VersionRow[])
+          .prepare(
+            `SELECT * FROM events WHERE event_type != 'void' AND recorded_at <= ?${languageFilter}`,
+          )
+          .all(...horizonArgs) as unknown as VersionRow[])
       : (db
-          .prepare("SELECT * FROM events WHERE event_type != 'void' AND occurred_at <= ?")
-          .all(horizon) as unknown as VersionRow[]);
+          .prepare(
+            `SELECT * FROM events WHERE event_type != 'void' AND occurred_at <= ?${languageFilter}`,
+          )
+          .all(...horizonArgs) as unknown as VersionRow[]);
   const voided = new Set(
     (
       (mode === "as-known"
         ? db
             .prepare(
-              "SELECT voids_event_id FROM events WHERE event_type = 'void' AND recorded_at <= ?",
+              `SELECT voids_event_id FROM events WHERE event_type = 'void' AND recorded_at <= ?${languageFilter}`,
             )
-            .all(horizon)
+            .all(...horizonArgs)
         : db
-            .prepare("SELECT voids_event_id FROM events WHERE event_type = 'void'")
-            .all()) as unknown as { voids_event_id: string }[]
+            .prepare(
+              `SELECT voids_event_id FROM events WHERE event_type = 'void'${languageFilter}`,
+            )
+            .all(...(language ? [language] : []))) as unknown as { voids_event_id: string }[]
     ).map((row) => row.voids_event_id),
   );
 
@@ -137,11 +147,16 @@ function resolveAdmitted(
 
 const STATE_NAMES = ["new", "learning", "review", "relearning"] as const;
 
-export function projectState(db: Database, mode: ProjectionMode, horizon: number): Projection {
+export function projectState(
+  db: Database,
+  mode: ProjectionMode,
+  horizon: number,
+  language?: string,
+): Projection {
   const snapshot = snapshotFor(db, mode, horizon);
   const params = JSON.parse(snapshot.params) as LinguaParams;
   const pfaParams: PfaParams = params.pfa ?? DEFAULT_PFA_PARAMS;
-  const admitted = resolveAdmitted(db, mode, horizon, params.confidenceThreshold);
+  const admitted = resolveAdmitted(db, mode, horizon, params.confidenceThreshold, language);
 
   const fsrs = new FSRS(params.fsrs as FSRSParameters);
   const cards = new Map<string, Card>();
@@ -220,4 +235,12 @@ export function projectState(db: Database, mode: ProjectionMode, horizon: number
     chunks: [...mastery.values()].sort((a, b) => (a.chunkId < b.chunkId ? -1 : 1)),
     skills,
   };
+}
+
+// 有效学习历史（当前认知口径）：准入控制等模块复用同一条 ADR-0014 管线，
+// 不另造历史口径。返回按 (occurred_at, event_id) 排序的准入事件。
+export function admittedEvents(db: Database, horizon: number, language?: string): LearningEvent[] {
+  const snapshot = snapshotFor(db, "current-belief", horizon);
+  const params = JSON.parse(snapshot.params) as LinguaParams;
+  return resolveAdmitted(db, "current-belief", horizon, params.confidenceThreshold, language);
 }
