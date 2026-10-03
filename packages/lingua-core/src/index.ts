@@ -51,10 +51,12 @@ export { FakeClock, SystemClock } from "./clock";
 export type { Clock } from "./clock";
 export { checkConfigPermissions, redactConfig, SECRET_MASK } from "./config-hardening";
 export type { ConfigPermissionReport, ConfigPermissionStatus } from "./config-hardening";
-export { migrate, openDatabase, SCHEMA_VERSION } from "./database";
+export { MIGRATION_VERSIONS, migrate, openDatabase, SCHEMA_VERSION } from "./database";
 export type { Database } from "./database";
 export { renderDigest } from "./digest";
 export type { Digest, DigestOptions } from "./digest";
+export { openExplanationLog } from "./explanation-log";
+export type { ExplanationLog, ExplanationLogOptions, ExplanationRef } from "./explanation-log";
 export { defaultParams, openEventStore } from "./event-store";
 export type {
   Assistance,
@@ -68,6 +70,22 @@ export type {
   Outcome,
   PfaOutcome,
 } from "./event-store";
+export {
+  EVIDENCE_LEVELS,
+  KNOWLEDGE_CATEGORIES,
+  loadKnowledgeEntries,
+  openKnowledgeStore,
+  parseKnowledgeEntries,
+  renderExplanation,
+} from "./knowledge-entry";
+export type {
+  EvidenceLevel,
+  ExplanationLayer,
+  KnowledgeCatalogItem,
+  KnowledgeCategory,
+  KnowledgeEntry,
+  KnowledgeStore,
+} from "./knowledge-entry";
 export { lemmatizeWord, tokenize } from "./lemmatizer";
 export type { Token } from "./lemmatizer";
 export { openMessageStore } from "./message-store";

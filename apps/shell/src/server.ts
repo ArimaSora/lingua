@@ -6,9 +6,12 @@ import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import type { LanguageModel } from "ai";
 import {
   loadCharacterCard,
+  loadKnowledgeEntries,
   migrate,
   openDatabase,
   openEventStore,
+  openExplanationLog,
+  openKnowledgeStore,
   openMessageStore,
   SystemClock,
   type CharacterCard,
@@ -96,7 +99,9 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
   }
 
   const model = options.model ?? buildModel(options.configPath);
-  const agent: CompanionAgent = createCompanionAgent({ model, db, clock, card });
+  // 知识条目库（issue #12）：随包种子内容，启动时加载并全量校验。
+  const knowledge = openKnowledgeStore({ entries: loadKnowledgeEntries() });
+  const agent: CompanionAgent = createCompanionAgent({ model, db, clock, card, knowledge });
 
   const contacts = [
     { id: "system", name: SYSTEM_CONTACT_NAME },
@@ -123,6 +128,16 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
             return;
           }
           json(res, 200, store.list({ language, contact }));
+          return;
+        }
+        // 讲解投递记录查询（issue #12）：某条消息引用过的知识条目 + 证据等级 + 层。
+        if (req.method === "GET" && url.pathname === "/api/explanations") {
+          const messageId = url.searchParams.get("messageId");
+          if (typeof messageId !== "string" || messageId.length === 0) {
+            json(res, 400, { error: "需要 messageId 查询参数" });
+            return;
+          }
+          json(res, 200, openExplanationLog({ db, clock }).forMessage(messageId));
           return;
         }
         if (req.method === "POST" && url.pathname === "/api/messages") {
