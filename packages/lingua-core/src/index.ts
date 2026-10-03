@@ -1,4 +1,20 @@
 export {
+  ADAPTIVE_ACCRUAL_FACTOR,
+  ADAPTIVE_MAX_DAILY_ACCRUAL,
+  ADAPTIVE_MIN_DAILY_ACCRUAL,
+  ADAPTIVE_WINDOW_DAYS,
+  BACKLOG_PAUSE_THRESHOLD,
+  BACKLOG_RESUME_THRESHOLD,
+  BALANCE_CAP,
+  openAdmission,
+  SEED_DAILY_ACCRUAL,
+  SEED_EXIT_ACTIVE_DAYS,
+  SEED_EXIT_COMPLETED_REVIEWS,
+} from "./admission";
+export type { Admission, AdmissionOptions, AdmissionPeriod, QuotaAccount } from "./admission";
+export { restoreBackup, runBackup } from "./backup";
+export type { BackupOptions, BackupResult, RestoreOptions } from "./backup";
+export {
   addRelationshipFact,
   characterCardFacts,
   getCharacterCard,
@@ -33,6 +49,8 @@ export type {
 } from "./chunk-store";
 export { FakeClock, SystemClock } from "./clock";
 export type { Clock } from "./clock";
+export { checkConfigPermissions, redactConfig, SECRET_MASK } from "./config-hardening";
+export type { ConfigPermissionReport, ConfigPermissionStatus } from "./config-hardening";
 export { migrate, openDatabase, SCHEMA_VERSION } from "./database";
 export type { Database } from "./database";
 export { renderDigest } from "./digest";
