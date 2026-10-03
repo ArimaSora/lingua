@@ -2,7 +2,7 @@ import { DatabaseSync } from "node:sqlite";
 
 export type Database = DatabaseSync;
 
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 6;
 
 export function openDatabase(path: string): Database {
   const db = new DatabaseSync(path);
@@ -23,7 +23,10 @@ type Migration = {
 // 结算进度（last_settled_day）与余额，速率由有效学习历史实时推导。
 // Schema v5：bootstrap_lessons + scheduler_tasks——Bootstrap 课包推送状态
 // 与调度器周期任务 last_run_at（issue #6）。
+// Schema v6：explanation_refs——讲解投递记录，可追溯到知识条目 ID 与证据
+// 等级（issue #12）。
 // 全部按语言隔离，user_id 预留。
+// 版本号占位协调：v5 归票 06（并发施工）；v6 归本票（issue #12）。
 const MIGRATIONS: Migration[] = [
   {
     version: 1,
@@ -257,7 +260,34 @@ const MIGRATIONS: Migration[] = [
       );
     `,
   },
+  {
+    version: 6,
+    // 讲解投递记录（issue #12）：交付的每条讲解可追溯到知识条目 ID +
+    // 证据等级 + 呈现层，挂在消息上供抽检。知识条目本体是随仓库分发的
+    // 策展内容（CC BY 4.0，文件承载），不落库；此处只存运行时投递事实，
+    // evidence_level 按交付时快照冗余存储，条目日后修订不影响历史追溯。
+    sql: `
+      CREATE TABLE explanation_refs (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL DEFAULT 'local',
+        language TEXT NOT NULL,
+        message_id TEXT NOT NULL REFERENCES messages (id),
+        entry_id TEXT NOT NULL,
+        evidence_level TEXT NOT NULL
+          CHECK (evidence_level IN ('学界共识', '教学性概括', '有争议')),
+        layer INTEGER NOT NULL CHECK (layer IN (1, 2, 3)),
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX idx_explanation_refs_message
+        ON explanation_refs (message_id, created_at, id);
+    `,
+  },
 ];
+
+// 供测试与运维断言实际登记的迁移版本（版本号不必连续，见上方协调注释）。
+export const MIGRATION_VERSIONS: readonly number[] = MIGRATIONS.map(
+  (migration) => migration.version,
+);
 
 export function migrate(db: Database): void {
   db.exec(`

@@ -1,0 +1,578 @@
+{
+  "$schema-note": "30 条手工种子知识条目（issue #12）：AI 起草 → 对照 WALS / English Grammar Profile / CEFR Companion Volume 一手来源校验。内容许可 CC BY 4.0（见同目录 README.md 与仓库根 LICENSE-CONTENT）。",
+  "entries": [
+    {
+      "id": "mindset-tense-marking",
+      "language": "en",
+      "category": "中英思维差异",
+      "title": "英语动词必须交出时间信息",
+      "layers": {
+        "intuition": {
+          "example": "I saw him yesterday. / I see him every day. —— 中文“见”永远长一个样，英语的 see 必须变成 saw 或 sees。",
+          "rule": "英语每个动词都得带上“何时”的标记，中文把时间交给时间词和语境。"
+        },
+        "expansion": "英语是时态强制语言：几乎每个完整句子的动词都要在现在/过去之间做选择，哪怕句子里已经写了 yesterday，动词也照样要变形（说 *I see him yesterday 是中文直译的经典错误）。中文动词没有任何时态变形，时间完全由“昨天/明天”这类时间词或语境表达。所以练英语时要养成新习惯：开口先问“这事在什么时间”，再把动词变成对应形态。",
+        "terminology": "时态（tense）：把事件定位在时间线上的语法范畴。Slobin 的 thinking for speaking 框架指出：一种语言的语法强制编码什么，说话者说话时就必须注意什么——英语强制注意时间定位，中文不强制。WALS 第 66 章（The Past Tense）记录了各语言过去时标记的类型学分布。"
+      },
+      "evidenceLevel": "学界共识",
+      "sources": [
+        "Slobin, D. I. (1996). From “thought and language” to “thinking for speaking”. In Gumperz & Levinson (Eds.), Rethinking Linguistic Relativity. CUP.",
+        "Comrie, B. (1985). Tense. Cambridge University Press.",
+        "WALS Ch.66 The Past Tense — https://wals.info/chapter/66"
+      ]
+    },
+    {
+      "id": "mindset-subject-required",
+      "language": "en",
+      "category": "中英思维差异",
+      "title": "英语句子必须有主语",
+      "layers": {
+        "intuition": {
+          "example": "It rains a lot here. / 这里常下雨。—— 中文没有主语很自然，英语硬要塞一个 it。",
+          "rule": "英语句子的主语位不能空，没“谁”可放也要用 it/there 占位；中文主语常省略。"
+        },
+        "expansion": "英语的完整句必须有显性主语，于是虚位 it 专门占天气、时间、距离的主语位（It’s hot. It’s Monday. It’s far.），there 占“存在”句的主语位（There is a problem.）。中文是话题优先语言：上下文里已知的主语直接省略（“下雨了吗？”“下了。”）。学两种语言各自的默认，比背规则更重要：说英语时先检查“主语在不在”。",
+        "terminology": "Li & Thompson (1976) 的主语突出（subject-prominent）vs 话题突出（topic-prominent）类型学：英语句法围绕主语组织，汉语围绕话题组织。WALS 第 101 章（Expression of Pronominal Subjects）：英语属“主语位置代词强制”型，汉语属“主语代词可省”型。虚位主语（expletive/dummy subject）。"
+      },
+      "evidenceLevel": "学界共识",
+      "sources": [
+        "Li, C. N., & Thompson, S. A. (1976). Subject and topic: A new typology of language. In Li (Ed.), Subject and Topic. Academic Press.",
+        "WALS Ch.101 Expression of Pronominal Subjects — https://wals.info/chapter/101"
+      ]
+    },
+    {
+      "id": "mindset-hypotaxis-parataxis",
+      "language": "en",
+      "category": "中英思维差异",
+      "title": "形合与意合：英语搭架子，中文流水句",
+      "layers": {
+        "intuition": {
+          "example": "我饿了，去吃饭。/ I was hungry, so I went to eat. —— 英语爱用 because/when/so 把关系说出来，中文常把关系留给读者自己接。",
+          "rule": "英语倾向用连接词把句间关系明码标出，中文倾向让意思顺着语序自然衔接——这是倾向，不是铁律。"
+        },
+        "expansion": "“英语重形合、汉语重意合”来自对比语言学/翻译学传统（Nida 1982 提出形合/意合是英汉最重要的区别之一，连淑能 1993 系统化）：英语更常用显性接应手段——连词、关系代词、介词（The book that I bought yesterday is missing.）；中文更常靠隐性连贯和语序（昨天买的书不见了）。注意三点：一，这是频率分布的倾向性概括，两种语言都同时使用两种手段；二，口语英语同样大量流水句，正式书面语才拉开差距；三，与之对应、国际学界更通行的严格框架是“主语突出 vs 话题突出”。",
+        "terminology": "形合（hypotaxis，显性接应）/意合（parataxis，隐性连贯）。在国际类型学中这对术语本指小句连接方式（主从 vs 并列），“英语=形合语、汉语=意合语”是中国对比语言学/翻译教学界的扩展用法，属单一传统主张，作为教学性概括使用。对应框架：主语突出 vs 话题突出（Li & Thompson 1976）。"
+      },
+      "evidenceLevel": "教学性概括",
+      "sources": [
+        "Nida, E. A. (1982). Translating Meaning. Summer Institute of Linguistics.",
+        "连淑能 (1993). 《英汉对比研究》. 高等教育出版社.",
+        "Li, C. N., & Thompson, S. A. (1976). Subject and topic: A new typology of language. Academic Press."
+      ]
+    },
+    {
+      "id": "mindset-motion-events",
+      "language": "en",
+      "category": "中英思维差异",
+      "title": "运动事件：英语把“怎么走”挂在小品词上",
+      "layers": {
+        "intuition": {
+          "example": "He ran into the room. / 他跑进房间。—— 英语 run（方式）+ into（路径）分开装，中文“跑进”揉在一个词里。",
+          "rule": "英语习惯“动词说移动方式、小品词说方向路径”，中文把方式和路径合进动词复合。"
+        },
+        "expansion": "英语是卫星框架语：核心动词负责方式（run/swim/crawl/tiptoe），路径交给小品词（in/out/up/away/through），所以能细腻地区分 walk into / dash out of / tiptoe past。中文用动结式复合同时编码两者（跑进、游出、爬过）。后果：说英语时要养成“方式动词 + 方向小品词”的组装直觉，这正是英语短语动词丰富的底层逻辑；而英语母语者学中文时也要反过来学会把路径收回动词里。",
+        "terminology": "Talmy (2000) 的运动事件类型学：卫星框架语（satellite-framed，方式在动词、路径在卫星成分）vs 动词框架语（verb-framed，路径在动词、方式在状语，如西班牙语）。Slobin 以此为核心证据发展 thinking for speaking：叙事时各语言说话者被迫注意运动的不同侧面。二语者重构该注意模式困难但可能（Han & Cadierno 2010）。"
+      },
+      "evidenceLevel": "学界共识",
+      "sources": [
+        "Talmy, L. (2000). Toward a Cognitive Semantics, Vol. II. MIT Press.",
+        "Slobin, D. I. (1996). From “thought and language” to “thinking for speaking”. CUP.",
+        "Han, Z., & Cadierno, T. (Eds.) (2010). Linguistic Relativity in SLA: Thinking for Speaking. Multilingual Matters."
+      ]
+    },
+    {
+      "id": "mindset-articles-definiteness",
+      "language": "en",
+      "category": "中英思维差异",
+      "title": "冠词：每提一个名词都要表态“哪个”",
+      "layers": {
+        "intuition": {
+          "example": "I saw a dog. The dog was big. / 我看见（一）条狗，（那）狗很大。—— 英语 a/the 必须选一个，中文全靠语境。",
+          "rule": "英语名词出场必须带“定/不定”标签（a/an/the/零冠词），中文把这份信息留给上下文。"
+        },
+        "expansion": "冠词系统强迫说话者每次都编码“听方能不能锁定你说的是哪个”：首次提及用 a/an（随便一个），已知或唯一用 the（那个），类指或不可数泛指常零冠词。中文没有冠词这个语法范畴，定指用“这/那”、语序或语境表达，名词本身无标记。这正是中文母语者最容易整句省掉冠词的原因：母语从不逼你做这个决定，注意力没被训练到这条通道上。具体选法见语法条目 grammar-articles-basic。",
+        "terminology": "定指性（definiteness）作为语法范畴的类型学分布：WALS 第 37 章（Definite Articles, Dryer）——英语属“有独立于指示词的定冠词”型（216 种语言），汉语属“无定冠词与不定冠词”型（198 种语言）。thinking for speaking 视角：强制编码塑造说话时的注意分配。"
+      },
+      "evidenceLevel": "学界共识",
+      "sources": [
+        "WALS Ch.37 Definite Articles (Dryer) — https://wals.info/chapter/37",
+        "Slobin, D. I. (1996). From “thought and language” to “thinking for speaking”. CUP."
+      ]
+    },
+    {
+      "id": "mindset-count-mass",
+      "language": "en",
+      "category": "中英思维差异",
+      "title": "可数/不可数：英语名词先分“数不数得清”",
+      "layers": {
+        "intuition": {
+          "example": "two books / some water —— 中文“两本书、一些水”名词不变，英语 book 要加 s、water 永远不能加。",
+          "rule": "英语把名词分成“能数”和“不能数”两阵营并强制标记，中文名词从不变形、靠量词计数。"
+        },
+        "expansion": "英语的可数/不可数是语法强制区分：复数 -s、不定冠词 a/an、many/few 只对可数开放，much/little 只对不可数开放。中文走另一条路：名词本身永远无标记，计数靠量词（一本书、一杯水、一条建议）。于是 advice、information、furniture、news 这些“中文直觉可数、英语不可数”的词成为高频坑（*an advice → a piece of advice）。搭配纪律见语法条目 grammar-count-uncount。",
+        "terminology": "数（number）范畴与量词（classifier）系统在类型学上呈互补分布的著名观察：有强制量词系统的语言通常不强制语法化复数标记（Greenberg 的普遍联系假说）。WALS 第 34 章（Occurrence of Nominal Plurality）记录复数标记的分布。mass/count 区分的语义基础是个体化（individuation）方式。"
+      },
+      "evidenceLevel": "学界共识",
+      "sources": [
+        "WALS Ch.34 Occurrence of Nominal Plurality — https://wals.info/chapter/34",
+        "Greenberg, J. H. (1974). Language Universals. Mouton.",
+        "Li, C. N., & Thompson, S. A. (1981). Mandarin Chinese: A Functional Reference Grammar. University of California Press."
+      ]
+    },
+    {
+      "id": "mindset-passive-agent",
+      "language": "en",
+      "category": "中英思维差异",
+      "title": "英语可以隐去“谁干的”",
+      "layers": {
+        "intuition": {
+          "example": "The window was broken. / 窗户被打破了。—— 英语略去“谁干的”很自然；中文“被”字句常带“遭殃”的味道。",
+          "rule": "英语被动是中性的“隐去施事”工具；中文“被”传统上带不如意色彩，日常更常说“把”字句或直接交代施事。"
+        },
+        "expansion": "英语被动语态高频且语用中性，科技、新闻文体里更是默认（The experiment was conducted in 2024.），施事可整体省略。中文“被”字句历史上主要用于不如意事件（被打、被骗、被偷），现代书面语受翻译影响已中性化，但口语里仍保留倾向——说“他被表扬了”没问题，说“他被吃饭了”就怪。真正的差异不是“有没有被动”，而是“省不省施事”的默认策略。被动的构成见语法条目 grammar-passive-voice。",
+        "terminology": "被动作为施事去焦点化（agent defocusing）手段的功能语法分析。Li & Thompson (1981) 论汉语“被”字句的 adverse（不如意）语义色彩。此条的中英对比属对比语言学传统的教学性概括，具体分布因文体而异。"
+      },
+      "evidenceLevel": "教学性概括",
+      "sources": [
+        "Li, C. N., & Thompson, S. A. (1981). Mandarin Chinese: A Functional Reference Grammar. University of California Press.",
+        "连淑能 (1993). 《英汉对比研究》. 高等教育出版社."
+      ]
+    },
+    {
+      "id": "mindset-time-vertical-myth",
+      "language": "en",
+      "category": "中英思维差异",
+      "title": "“中国人竖着想时间”？这个说法本身站不住",
+      "layers": {
+        "intuition": {
+          "example": "上个月 / 下个月 —— 网上流传“中文用上下说时间，所以中国人垂直感知时间”。",
+          "rule": "中文确有“上/下个月”的说法，但“这塑造了垂直时间思维”的实验结论没能被重复出来——别把它当知识学。"
+        },
+        "expansion": "Boroditsky (2001) 的著名实验声称：普通话者因“上/下月”隐喻而倾向垂直表征时间。但 January & Kako (2007)、Chen (2007) 等六次独立复制全部失败，且发现普通话者实际更多使用水平时间隐喻。这条目存在的意义恰恰是示范证据等级：语言影响思维的研究中，“说话时的注意偏向”这类弱效应有稳健支持（如俄语蓝色范畴），“语言决定思维方式”的强版本没有。遇到“XX 语言的人天生 YY 思维”的说法，先问证据等级。",
+        "terminology": "语言相对论（Sapir–Whorf hypothesis）强弱版本：强决定论已被学界否定；neo-Whorfian 弱效应任务依赖、效应量小。复制失败文献：January & Kako (2007, Cognition 104(2))、Chen (2007, Cognition 104(2):427–436)。稳健弱效应案例：Winawer et al. (2007, PNAS) 俄语蓝色范畴。"
+      },
+      "evidenceLevel": "有争议",
+      "sources": [
+        "Boroditsky, L. (2001). Does language shape thought? Cognitive Psychology, 43, 1–22.（后被多次独立复制失败）",
+        "January, D., & Kako, E. (2007). Re-evaluating evidence for linguistic relativity. Cognition, 104(2), 417–426.",
+        "Chen, J.-Y. (2007). Do Chinese and English speakers think about time differently? Cognition, 104(2), 427–436."
+      ]
+    },
+    {
+      "id": "mindset-nominalization",
+      "language": "en",
+      "category": "中英思维差异",
+      "title": "英语爱把动作“冻”成名词",
+      "layers": {
+        "intuition": {
+          "example": "The cancellation of the meeting surprised us. / 会议取消了，我们很惊讶。—— 英语把“取消”包成名词当主语，中文把事用小句说一遍。",
+          "rule": "英语书面语喜欢把动作事件名词化后当零件组装，中文倾向让动作保持动词形态、按顺序铺开。"
+        },
+        "expansion": "名词化是英语正式语域的核心资源：the rapid growth of the market、his refusal to answer、a failure to communicate。它把信息压缩进名词短语，一句顶中文两三小句，代价是阅读密度陡增。教学上的含义：一，读英语长句时先找“被冻住的动作”还原成小句；二，写作入门阶段不必模仿，先把动词句说顺。这是文体倾向而非对错——英语口语同样以小句为主。",
+        "terminology": "名词化（nominalization）；Halliday 系统功能语言学的“语法隐喻”（grammatical metaphor）概念：用名词形式表达本由动词/小句表达的意义。Biber 的语域维度分析显示 informational density 是书面英语区别于口语的核心维度。中英对比表述属对比修辞/对比语言学传统的教学性概括。"
+      },
+      "evidenceLevel": "教学性概括",
+      "sources": [
+        "Halliday, M. A. K. (1994). An Introduction to Functional Grammar (2nd ed.). Edward Arnold.",
+        "连淑能 (1993). 《英汉对比研究》. 高等教育出版社."
+      ]
+    },
+    {
+      "id": "mindset-aspect-le",
+      "language": "en",
+      "category": "中英思维差异",
+      "title": "“了”不是过去时",
+      "layers": {
+        "intuition": {
+          "example": "我吃了饭了。/ I’ve eaten. —— 但“明天这个时候我就吃了饭了”也能说：“了”管的是“完成”，不是“过去”。",
+          "rule": "中文用“了”标记“完成/变化”这个观察视角，英语用 -ed 标记“时间在过去”——两套系统管的不是同一件事。"
+        },
+        "expansion": "英语强制时态：事件必须定位在时间线上（过去 saw/现在 see）。中文强制体：事件必须呈现为某种内部形态——完成（吃了）、经历（吃过）、进行（吃着），时间交给时间词。最能说明问题的反例是将来句也能用“了”（明天这个时候我就吃了饭了）。两个方向的学习都卡在同一个地方：中文母语者说英语时常忘记“没有‘了’的位置≠不用变形”（*I see him yesterday），英语母语者学中文时到处乱加“了”（*我昨天去了——其实这句可以，但“我去北京了三次”要换“过”）。",
+        "terminology": "时（tense）vs 体（aspect）的类型学区分（Comrie 1976/1985）：时态定位事件于时间线，体呈现事件的内部时间结构（完成/进行/经历）。动词后“了₁”为完成体标记，句尾“了₂”标记新状态/变化（Li & Thompson 1981）。"
+      },
+      "evidenceLevel": "学界共识",
+      "sources": [
+        "Comrie, B. (1976). Aspect. Cambridge University Press.",
+        "Li, C. N., & Thompson, S. A. (1981). Mandarin Chinese: A Functional Reference Grammar. University of California Press."
+      ]
+    },
+    {
+      "id": "grammar-svo-word-order",
+      "language": "en",
+      "category": "高频语法",
+      "title": "基本语序与疑问句倒装",
+      "layers": {
+        "intuition": {
+          "example": "You like coffee. → Do you like coffee? —— 中文加个“吗”就成问句，英语要请出助动词 do 并搬到句首。",
+          "rule": "英语成分位置基本固定（主-动-宾），变疑问/否定要动用助动词，不能只换语调。"
+        },
+        "expansion": "英语基本语序 SVO（主语-动词-宾语）。陈述变疑问的规则：句中有 be 或情态动词就把它提到主语前（Are you…? Can she…?），没有就借 do/does/did 补位（Do you like…? Did they go…?），此时主动词退回原形。中文疑问用语调或语气词（吗/呢），语序不动。常见错误：*You like coffee? 口语里升调可以，写作和正式场合必须倒装；*Does she likes…?（-s 已转移到 does 上）。",
+        "terminology": "WALS 第 81 章（Order of Subject, Object and Verb）：英语为 SVO 型；第 116 章（Polar Questions）记录疑问标记策略的类型学。do-support（助动词补位）在语言中相对少见。EGP 将一般疑问句构成列为 A1 级特征。"
+      },
+      "evidenceLevel": "学界共识",
+      "sources": [
+        "WALS Ch.81 Order of Subject, Object and Verb — https://wals.info/chapter/81",
+        "WALS Ch.116 Polar Questions — https://wals.info/chapter/116",
+        "English Grammar Profile — https://englishprofile.org/english-grammar-profile（questions, A1）"
+      ]
+    },
+    {
+      "id": "grammar-third-person-s",
+      "language": "en",
+      "category": "高频语法",
+      "title": "一般现在时第三人称 -s",
+      "layers": {
+        "intuition": {
+          "example": "She works here. / I work here. —— 只有“他/她/它”的现在时动词要戴小尾巴。",
+          "rule": "一般现在时里，主语是第三人称单数（he/she/it 或单数名词）时动词加 -s，其他人称不变。"
+        },
+        "expansion": "拼写细节：多数加 -s（work→works），-s/-sh/-ch/-x/-o 结尾加 -es（watch→watches, go→goes），辅音+y 变 -ies（study→studies）。关键机制：疑问和否定中这个小尾巴转移到助动词上——Does she work? She doesn’t work.（*She doesn’t works 是双重标记错误）。中文没有任何主谓一致变形，所以这一处纯靠重复到自动化；它是口语里漏掉也不致命、写作里漏了立刻露怯的特征。",
+        "terminology": "主谓一致（subject-verb agreement）。EGP 将一般现在时第三人称 -s 列为 A1 级特征。英语的一致系统是历史大幅简化的残留（古英语有完整人称词尾），仅存现在时第三人称单数一处标记。"
+      },
+      "evidenceLevel": "学界共识",
+      "sources": [
+        "English Grammar Profile — https://englishprofile.org/english-grammar-profile（present simple, 3rd person -s, A1）"
+      ]
+    },
+    {
+      "id": "grammar-past-simple",
+      "language": "en",
+      "category": "高频语法",
+      "title": "一般过去时：规则与不规则",
+      "layers": {
+        "intuition": {
+          "example": "I worked yesterday. / I went yesterday. —— work 加 -ed，go 整个换成 went，没有道理可讲。",
+          "rule": "说“过去某个确定时间发生的一件事”，动词换过去式；高频动词大多不规则，逐个记熟。"
+        },
+        "expansion": "规则动词加 -ed（work→worked；重读闭音节双写 stop→stopped；辅音+y 变 studied）。高频不规则动词约两百个（go→went, see→saw, take→took, buy→bought…），按使用频率分批记。否定与疑问用 did + 动词原形：Did you go?（*Did you went?）、I didn’t go.（*I didn’t went）。最大陷阱恰恰来自中文：中文靠“昨天”表达时间，于是学习者写了 yesterday 就以为任务完成，忘了动词还必须变形。",
+        "terminology": "EGP A1 级特征：“Can use common regular and irregular verbs in the past simple”。不规则过去式是历史音变（ablaut 元音交替系统）的化石；频率越高的动词越抵抗规则化（Bybee 的频率效应研究）。"
+      },
+      "evidenceLevel": "学界共识",
+      "sources": [
+        "English Grammar Profile — https://englishprofile.org/english-grammar-profile（past simple, A1）",
+        "Bybee, J. (2007). Frequency of Use and the Organization of Language. OUP."
+      ]
+    },
+    {
+      "id": "grammar-present-perfect",
+      "language": "en",
+      "category": "高频语法",
+      "title": "现在完成时：和现在的连线",
+      "layers": {
+        "intuition": {
+          "example": "I have seen that movie. / I saw it in 2019. —— 说“经历”用 have seen；一旦说出具体时间，必须退回 saw。",
+          "rule": "have + 过去分词说“过去的事和现在有连线”；给出确定过去时间就断线，改用一般过去时。"
+        },
+        "expansion": "三大用法：一，经历（Have you ever been to Japan? I’ve never tried it.）；二，刚发生且结果影响现在（I’ve lost my keys. = 现在没钥匙）；三，从过去持续到现在，配 for/since（I’ve lived here for three years.）。死规则：确定过去时间状语（yesterday / last week / in 2019）绝不与现在完成时同句——*I have seen it yesterday 必须改成 I saw it yesterday.。中文用“过/了”近似对应但分工不同（见 mindset-aspect-le），所以这是中国学习者最难内化的时态之一。",
+        "terminology": "EGP：ever/never 经历用法为 A2 级，for/since 持续用法为 B1 级。完成体（perfect）语义：先时性 + 现时相关性（Comrie 1976）。与确定过去时间状语不兼容的现象称 present perfect puzzle。"
+      },
+      "evidenceLevel": "学界共识",
+      "sources": [
+        "English Grammar Profile — https://englishprofile.org/english-grammar-profile（present perfect simple: ever/never A2, for/since B1）",
+        "Comrie, B. (1976). Aspect. Cambridge University Press."
+      ]
+    },
+    {
+      "id": "grammar-articles-basic",
+      "language": "en",
+      "category": "高频语法",
+      "title": "冠词 a/an/the/零冠词的基本分工",
+      "layers": {
+        "intuition": {
+          "example": "I saw a dog. The dog was friendly. —— 第一次提到用 a，再提到用 the。",
+          "rule": "a = “随便一个/首次登场”，the = “你知我知的那个”，复数或不可数的泛指什么都不用。"
+        },
+        "expansion": "核心循环：首次提及 a/an（仅限可数单数）→ 再次提及或双方皆知用 the（the sun, the door, the movie we talked about）；类指泛指用零冠词（Dogs are loyal. I like music.）。a/an 的选择看发音不看字母：an hour（h 不发音）、a university（读作 /juː/）。不可数名词和复数名词没有 a（*an information）。中文没有冠词范畴，这套系统需要整体新建，先看 mindset-articles-definiteness 建立“为什么必须有”的直觉。",
+        "terminology": "EGP 冠词特征横跨 A1（a/an + 单数可数名词）经 A2（the 表双方共知）到 B1+（零冠词抽象用法）。定指性（definiteness）的类型学：WALS 第 37 章。泛指（generic reference）的三种英语表达：a dog / the dog / dogs，语用分工细微。"
+      },
+      "evidenceLevel": "学界共识",
+      "sources": [
+        "English Grammar Profile — https://englishprofile.org/english-grammar-profile（articles, A1–B1）",
+        "WALS Ch.37 Definite Articles — https://wals.info/chapter/37"
+      ]
+    },
+    {
+      "id": "grammar-count-uncount",
+      "language": "en",
+      "category": "高频语法",
+      "title": "many/much 与不可数名词的搭配纪律",
+      "layers": {
+        "intuition": {
+          "example": "many books / much water —— 中文一个“许多”，英语要分两种说法。",
+          "rule": "可数名词跟 many/few 走，不可数名词跟 much/little 走；some/any 两边通吃。"
+        },
+        "expansion": "搭配表：可数——many, few, a few, a number of；不可数——much, little, a little, an amount of；通用——some, any, a lot of, no。高频不可数坑（中文直觉可数）：advice, information, furniture, news, luggage, homework, progress, bread——要计数就加单位词：a piece of advice, two items of news, a slice of bread。some 用在肯定句与表提议的问句（Would you like some tea?），any 用在一般疑问与否定。",
+        "terminology": "EGP A1–A2 级量词特征。量词（classifier）语言通常不语法化复数标记的互补分布观察（Greenberg 1974）。思维差异背景见 mindset-count-mass。"
+      },
+      "evidenceLevel": "学界共识",
+      "sources": [
+        "English Grammar Profile — https://englishprofile.org/english-grammar-profile（quantifiers, A1–A2）",
+        "Greenberg, J. H. (1974). Language Universals. Mouton."
+      ]
+    },
+    {
+      "id": "grammar-modal-verbs",
+      "language": "en",
+      "category": "高频语法",
+      "title": "情态动词：不变形 + 直接接原形",
+      "layers": {
+        "intuition": {
+          "example": "She can swim.（*She cans swim.）—— can 不随人称变，后面的动词也保持原形。",
+          "rule": "can/must/should 这类词是“能力/必要/建议”的开关：自身永远不变形，后接动词原形。"
+        },
+        "expansion": "核心成员：can（能力/可能/许可）、must（必须/肯定推测）、should（建议）、will/would、might/may。四条纪律：无第三人称 -s；后直接接动词原形（*must to go）；否定直接加 not（can’t, shouldn’t）；疑问直接倒装（Can you…?）。高频陷阱：mustn’t 是“禁止”，不是“不必”——“不必”要说 don’t have to 或 needn’t。礼貌软化用过去形态：could/would 比 can/will 更客气（见 register-requests）。",
+        "terminology": "EGP：can 表能力 A1 级，must/should A2 级。英语情态助动词是“残缺范式”（defective paradigm）：无不定式与分词形式（*to can, *canning），地位介于功能词与动词之间。"
+      },
+      "evidenceLevel": "学界共识",
+      "sources": [
+        "English Grammar Profile — https://englishprofile.org/english-grammar-profile（can A1; must/should A2）"
+      ]
+    },
+    {
+      "id": "grammar-conditionals",
+      "language": "en",
+      "category": "高频语法",
+      "title": "if 条件句的时态错配",
+      "layers": {
+        "intuition": {
+          "example": "If it rains, I’ll stay home. / If it rained, I would stay home. —— 真可能用现在时，纯假想反而用过去时。",
+          "rule": "if 从句的时态表达“离现实多远”而不是时间：现在时=真可能发生，过去时+wound=想象。"
+        },
+        "expansion": "第一条件句：If + 一般现在时，will/can + 原形——真实可能（If you hurry, you’ll catch it.）。第二条件句：If + 一般过去时，would + 原形——假想或委婉（If I were you, I’d apologize. / If I had time, I would help.——潜台词：没有时间）。头号陷阱：if 从句里不用 will——*If it will rain 永远错（除非 will 表“愿意”：If you will wait here…）。中文“如果…就”一套形式走天下，英语靠时态错配区分“真可能/纯想象”，这是全新的信号系统。",
+        "terminology": "EGP：零/第一条件句约 B1 级，第二条件句 B1+–B2 级。条件句时态的“距离”语义分析（过去时标记模态距离而非时间距离）。第三条件句（If I had known…）表与过去事实相反，B2 级。"
+      },
+      "evidenceLevel": "学界共识",
+      "sources": [
+        "English Grammar Profile — https://englishprofile.org/english-grammar-profile（conditionals, B1–B2）"
+      ]
+    },
+    {
+      "id": "grammar-passive-voice",
+      "language": "en",
+      "category": "高频语法",
+      "title": "被动语态的构成与用途",
+      "layers": {
+        "intuition": {
+          "example": "The bridge was built in 1900. —— 谁建的不知道或不重要，就把承受者推上主语位。",
+          "rule": "当“承受动作的一方”比“做动作的人”更值得当主角时，用 be + 过去分词。"
+        },
+        "expansion": "构成公式：be（随时态变形）+ 过去分词——is made / was built / has been done / will be held / is being repaired。施事需要出现时用 by 引出（The novel was written by a teenager.），多数情况下直接省略。三条边界：不及物动词不能被动（*was happened）；get-被动更口语且暗含“遭遇”（He got fired.）；中文“被”字句的使用条件更窄、带不如意色彩，不能逐句平移（见 mindset-passive-agent）。",
+        "terminology": "EGP：一般现在时被动 A2 级，一般过去时被动 B1 级。被动的功能分析：主语化（topicalization）承受者 + 施事去焦点化（agent defocusing），科技/新闻文体的客观化资源。"
+      },
+      "evidenceLevel": "学界共识",
+      "sources": [
+        "English Grammar Profile — https://englishprofile.org/english-grammar-profile（passives, A2–B1）"
+      ]
+    },
+    {
+      "id": "grammar-ing-infinitive",
+      "language": "en",
+      "category": "高频语法",
+      "title": "动名词 vs 不定式：doing 还是 to do",
+      "layers": {
+        "intuition": {
+          "example": "I enjoy reading. / I want to read. —— enjoy 后面只能 doing，want 后面只能 to do，由前一个动词说了算。",
+          "rule": "doing 把动作当“一件事/活动”，to do 把动作当“一个目的/打算”；具体搭配主要由前面的动词决定。"
+        },
+        "expansion": "高频只接 doing：enjoy, avoid, finish, mind, suggest, keep, practice。高频只接 to do：want, decide, hope, plan, promise, learn, afford。两者皆可但意义分叉的记忆点：remember doing（记得做过）vs remember to do（记得要去做）；stop doing（停下这件事）vs stop to do（停下手头的事去做另一件）；try doing（试试看）vs try to do（努力做）。规律性有限，按语块整体记最省力（enjoy doing 当一个词记）。",
+        "terminology": "EGP：动词 + -ing 与动词 + to 不定式的对立主要分布在 B1 级。认知语法分析：动名词呈现事件为具体/已然的整体，不定式指向潜在/未然的动作（该解释属认知学派框架，作教学性使用）。"
+      },
+      "evidenceLevel": "学界共识",
+      "sources": [
+        "English Grammar Profile — https://englishprofile.org/english-grammar-profile（verb + -ing / to-infinitive, B1）"
+      ]
+    },
+    {
+      "id": "register-how-are-you",
+      "language": "en",
+      "category": "语用语域",
+      "title": "“How are you?” 是寒暄，不是提问",
+      "layers": {
+        "intuition": {
+          "example": "—How are you? —Good, you? —— 没人真的在问你的健康状况，标准答案是程式。",
+          "rule": "How are you 的功能是打招呼确认关系，期待简短程式化回应（Good! / Not bad. / Pretty good.），不是信息询问。"
+        },
+        "expansion": "这类交换叫寒暄（phatic communion）：内容不重要，重要的是发出“我愿意与你互动”的信号，功能对应中文的“吃了吗”。回应纪律：简短 + 回问（Good, thanks. You?），认真汇报失眠和颈椎反而语域失配。变体梯度：How’s it going? / How are you doing?（同功能更随意）、What’s up?（更随意，回 Not much. 即可）。想真聊近况会换说法：How have you been? / How’s the new job?",
+        "terminology": "Malinowski (1923) 提出 phatic communion（寒暄交谈）概念。CEFR Companion Volume (2020) 社会语言得体性（sociolinguistic appropriateness）量表：A1–A2 级要求掌握礼貌套话与最简日常形式。会话分析视角：greeting-greeting 相邻对（adjacency pair）。"
+      },
+      "evidenceLevel": "学界共识",
+      "sources": [
+        "Malinowski, B. (1923). The problem of meaning in primitive languages. In Ogden & Richards, The Meaning of Meaning.",
+        "Council of Europe (2020). CEFR Companion Volume, sociolinguistic appropriateness scale — https://www.coe.int/en/web/common-european-framework-reference-languages"
+      ]
+    },
+    {
+      "id": "register-greeting-formality",
+      "language": "en",
+      "category": "语用语域",
+      "title": "打招呼的正式度：hi / hey / hello",
+      "layers": {
+        "intuition": {
+          "example": "Hey Maya! / Hi, Dr. Smith. —— 都是“你好”，hey 最随意，hello 偏中性。",
+          "rule": "hi 日常通用，hey 熟人更随便，hello 中性偏正式；正式场合加称呼（Hi, Professor Lee）。"
+        },
+        "expansion": "梯度大致：hey < hi < hello < good morning/afternoon/evening。书写场景：熟人 Hi + 名；半正式 Hello + 名 或 Dear + 名；正式 Dear Mr./Ms./Dr. + 姓。hey 发给陌生人或上级会显得越界，hello 发给闺蜜则略显生疏。网络语域里 heyy / heyyy 是刻意的亲昵变体（拼写延长=语气加强），属年轻人的非正式书写习惯。",
+        "terminology": "CEFR CV (2020) 得体性量表 B1 级：“能在中性/非正式之间做基本区分，知道礼貌程式”。称呼语（address forms）作为社会距离信号的研究传统（Brown & Ford 1961）。"
+      },
+      "evidenceLevel": "教学性概括",
+      "sources": [
+        "Council of Europe (2020). CEFR Companion Volume, sociolinguistic appropriateness scale — https://www.coe.int/en/web/common-european-framework-reference-languages",
+        "Brown, R., & Ford, M. (1961). Address in American English. Journal of Abnormal and Social Psychology, 62."
+      ]
+    },
+    {
+      "id": "register-thanks-gradation",
+      "language": "en",
+      "category": "语用语域",
+      "title": "致谢的正式度：thanks / thank you / appreciate",
+      "layers": {
+        "intuition": {
+          "example": "Thanks! / Thank you for your time. —— 越完整越正式，越短越随意。",
+          "rule": "thanks 随意，thank you 中性万能，I really appreciate it 郑重；小场合说得太隆重反而生疏。"
+        },
+        "expansion": "梯度：Cheers（英式随意）< Thanks < Thank you < Thank you very much / Many thanks < I (really) appreciate it（偏美式、显郑重）。陌生人/服务场景用 thank you 永不出错；好友顺手递个东西回 I appreciate your assistance 会变成玩笑。回应梯度同样存在：You’re welcome（中性）/ No problem / Anytime / No worries（随意）/ My pleasure（正式服务语）。商务邮件里 Thanks in advance 很常见但带一点命令味，对上级慎用。",
+        "terminology": "礼貌策略与形式长度正相关（越长越正式）是语用学的普遍观察（Brown & Levinson 1987 礼貌理论）。CEFR CV (2020) 得体性量表“以得体方式执行语言功能”。"
+      },
+      "evidenceLevel": "教学性概括",
+      "sources": [
+        "Brown, P., & Levinson, S. (1987). Politeness: Some Universals in Language Usage. CUP.",
+        "Council of Europe (2020). CEFR Companion Volume, sociolinguistic appropriateness scale — https://www.coe.int/en/web/common-european-framework-reference-languages"
+      ]
+    },
+    {
+      "id": "register-sorry-excuse",
+      "language": "en",
+      "category": "语用语域",
+      "title": "sorry / excuse me / pardon 的分工",
+      "layers": {
+        "intuition": {
+          "example": "Sorry I’m late. / Excuse me, where’s the exit? —— 迟到说 sorry，借过问路说 excuse me，不能互换。",
+          "rule": "sorry 为已经造成的麻烦道歉；excuse me 为即将发生的打扰开路；pardon(me) 主要用于没听清请重复。"
+        },
+        "expansion": "场景对照：撞到人说 Sorry! 或 Excuse me!（美式更多用后者）；打断别人、问路、请让路用 Excuse me；没听清说 Sorry? 或 Pardon?（升调，英式更常见 Pardon?）；较重大的过失用 I (really) apologize（偏正式书面）。中文“对不起/不好意思”覆盖面比 sorry 大，逐字平移是语用语言失误的经典案例：问路开口说 *Sorry, where is…? 不算错但不地道，母语者用 Excuse me。",
+        "terminology": "道歉言语行为（apology speech act）的跨文化对比：CCSARP 项目（Blum-Kulka, House & Kasper 1989）系统比较了各语言请求与道歉的策略构成。Thomas (1983) 区分语用语言失误（pragmalinguistic failure）与社交语用失误——本条属前者，由 L1 语用映射直接平移造成。"
+      },
+      "evidenceLevel": "教学性概括",
+      "sources": [
+        "Blum-Kulka, S., House, J., & Kasper, G. (Eds.) (1989). Cross-Cultural Pragmatics: Requests and Apologies. Ablex.",
+        "Thomas, J. (1983). Cross-cultural pragmatic failure. Applied Linguistics, 4(2)."
+      ]
+    },
+    {
+      "id": "register-requests",
+      "language": "en",
+      "category": "语用语域",
+      "title": "请求的礼貌梯度：包装越厚越客气",
+      "layers": {
+        "intuition": {
+          "example": "Open the window. → Can you open the window? → Could you possibly open the window? —— 同一个请求，包装越厚越客气。",
+          "rule": "英语请求的礼貌度靠间接程度调节：直接命令最硬，Can you…? 日常，Could you…? / Would you mind…? 更软。"
+        },
+        "expansion": "梯度：祈使句（仅适合对下级、紧急或亲近场景）< Can you…?（日常）< Could you…?（礼貌）< Would you mind -ing…? / I was wondering if you could…（郑重、对上级或陌生人）。中文靠“请/麻烦/能不能”调节，英语靠句式层级 + 过去形态软化（could 比 can 软、would 比 will 软）。服务场景的对等表达：Give me a coffee 显粗鲁，Can I get a coffee? 是自然日常。拒绝时同样需要缓冲（见 register-refusals）。",
+        "terminology": "Brown & Levinson (1987) 礼貌理论：请求威胁对方负面子（negative face），间接策略降低威胁。Searle (1975) 间接言语行为（indirect speech acts）：以问句形式执行请求功能。CEFR CV (2020) 得体性量表 B2 级：“能识别并初步产出语域差异”。"
+      },
+      "evidenceLevel": "学界共识",
+      "sources": [
+        "Brown, P., & Levinson, S. (1987). Politeness: Some Universals in Language Usage. CUP.",
+        "Searle, J. (1975). Indirect speech acts. In Cole & Morgan (Eds.), Syntax and Semantics 3.",
+        "Council of Europe (2020). CEFR Companion Volume, sociolinguistic appropriateness scale — https://www.coe.int/en/web/common-european-framework-reference-languages"
+      ]
+    },
+    {
+      "id": "register-smalltalk",
+      "language": "en",
+      "category": "语用语域",
+      "title": "闲聊（small talk）：任务是给关系保温",
+      "layers": {
+        "intuition": {
+          "example": "Crazy weather, right? — Yeah, hope it clears up! —— 聊天气不是在交换气象数据。",
+          "rule": "small talk（天气、周末、通勤）的功能是确认“我们关系良好”，话题安全无聊正是设计要点。"
+        },
+        "expansion": "英语文化里，电梯、排队、会议开始前的沉默常被视为尴尬，small talk 是默认填充物。安全话题：天气、周末计划、本地新鲜事、共同在场的场景；职场默认避开薪资、政治、宗教。文化差异点：中文寒暄可以直接问“吃了吗/去哪儿”，英语的 Where are you going? 对不熟的人有窥探感。开始与结束都有程式：How’s your week going? 开场，Well, better get going. / Nice talking to you. 收尾——收尾程式比话题本身更值得先学。",
+        "terminology": "phatic communion（Malinowski 1923）；Goffman 互动秩序（interaction order）：闲聊是维持共同在场体面的常规操作。CEFR CV (2020) 得体性量表关键概念含 “socialising: following basic routines”。中英可聊话题边界的具体分布属教学性概括。"
+      },
+      "evidenceLevel": "教学性概括",
+      "sources": [
+        "Malinowski, B. (1923). The problem of meaning in primitive languages.",
+        "Council of Europe (2020). CEFR Companion Volume, sociolinguistic appropriateness scale — https://www.coe.int/en/web/common-european-framework-reference-languages"
+      ]
+    },
+    {
+      "id": "register-textese",
+      "language": "en",
+      "category": "语用语域",
+      "title": "网络语域：lol/omg/imo 是变体，不是错误",
+      "layers": {
+        "intuition": {
+          "example": "lol that’s exactly what I meant —— 网聊里 lol 基本是语气词，并不真的表示“笑出声”。",
+          "rule": "lol/omg/imo/ngl 是“网络口语”语域的标记：用在朋友聊天是地道，用在正式邮件是事故。"
+        },
+        "expansion": "高频成员：lol（缓和语气/表示轻松）、omg（惊讶）、imo/imho（依我看/愚见）、idk/idc（不知道/不在乎）、tbh（说真的）、ngl（not gonna lie，坦白讲）、btw（顺带）、fyi（供参考，职场也用）。要点：母语者大量在用，且普遍清楚哪些场合不能出现——母语者短信语（textese）研究的主流结论是对读写能力无害甚至正相关。学习者要学的不是“用不用”，而是“在哪用”：模仿之前先确认场合匹配。",
+        "terminology": "Tagliamonte & Denis (2008)：青少年 IM 语言不是“语言毁灭”，而是一个混合新旧变体的新语域，使用者具备语域切换意识。van Dijk et al. (2016, PLOS ONE)：textese 不损害语法发展，儿童与成人都按对象切换语域。Herring (2004) CMDA 确立 CMC 语言为独立语域。CEFR 得体性量表 C1：“能灵活得体地调整语域”。"
+      },
+      "evidenceLevel": "学界共识",
+      "sources": [
+        "Tagliamonte, S. A., & Denis, D. (2008). Linguistic ruin? LOL! Instant messaging and teen language. American Speech, 83(1).",
+        "van Dijk, C. N., et al. (2016). The influence of texting language on grammar and executive functions. PLOS ONE, 11(3).",
+        "Crystal, D. (2008). Txting: The Gr8 Db8. Oxford University Press."
+      ]
+    },
+    {
+      "id": "register-refusals",
+      "language": "en",
+      "category": "语用语域",
+      "title": "拒绝的缓冲格式：先垫一句再说 but",
+      "layers": {
+        "intuition": {
+          "example": "—Wanna grab lunch? —I’d love to, but I have a meeting. —— 裸 No 不带包装，在英语里显得冷硬。",
+          "rule": "英语拒绝邀请/请求的默认格式 = 积极开头（I’d love to / Thanks for asking）+ but + 简短理由。"
+        },
+        "expansion": "常用缓冲开头：I’d love to, but… / Thanks, but… / Sounds fun, unfortunately…；理由点到为止即可（I have a meeting. / I’m swamped this week.），过度解释反而显得在编造。推迟式软拒绝：Maybe another time? / Rain check?（改天，源自棒球改期票）。边界：对推销、纠缠或需要划清界限时，直接坚定的 No, thanks. / I’m not interested. 完全得体——缓冲是留给想维持的关系的。中文“改天再说”有类似缓和功能，直觉可以平移。",
+        "terminology": "拒绝言语行为的跨文化语用研究：Beebe, Takahashi & Uliss-Weltz (1990) 将英语拒绝分解为语义公式序列（积极情感表达 + 理由 + 替代提议）。礼貌理论中拒绝属威胁正面子（positive face）行为，需补偿策略。具体文化分布属教学性概括。"
+      },
+      "evidenceLevel": "教学性概括",
+      "sources": [
+        "Beebe, L. M., Takahashi, T., & Uliss-Weltz, R. (1990). Pragmatic transfer in ESL refusals. In Scarcella et al. (Eds.), Developing Communicative Competence.",
+        "Brown, P., & Levinson, S. (1987). Politeness: Some Universals in Language Usage. CUP."
+      ]
+    },
+    {
+      "id": "register-email-formality",
+      "language": "en",
+      "category": "语用语域",
+      "title": "邮件的开头结尾是固定程式",
+      "layers": {
+        "intuition": {
+          "example": "Dear Professor Li, … Best regards, Xiaoming —— 开头称呼与结尾敬语是模板零件，不是即兴客套。",
+          "rule": "英语正式邮件 = 固定零件组装：Dear/Hello/Hi + 称呼开头，Best/Thanks 结尾，正文第一句直接点明来意。"
+        },
+        "expansion": "开头梯度：Dear + 头衔 + 姓（最正式）→ Hello/Hi + 名（日常职场）→ Hey（熟人）。结尾梯度：Yours sincerely/faithfully（英式正式）→ Best regards / Kind regards（通用正式）→ Best（日常万能）→ Thanks / Cheers（随意）。正文首句直说来意：I’m writing to ask about… / Quick question about…。中式“此致敬礼”逐字英译会闹笑话——用最朴素的模板（Hi + 名 / Best）即可覆盖八成场景。",
+        "terminology": "体裁分析（genre analysis）：Swales (1990) 语步（move）分析——正式邮件由“称呼-来意-请求-收尾程式”等固定语步构成。CEFR CV (2020) 得体性量表：“以得体方式执行语言功能（低级别时在中性语域中）”。"
+      },
+      "evidenceLevel": "教学性概括",
+      "sources": [
+        "Swales, J. M. (1990). Genre Analysis: English in Academic and Research Settings. CUP.",
+        "Council of Europe (2020). CEFR Companion Volume, sociolinguistic appropriateness scale — https://www.coe.int/en/web/common-european-framework-reference-languages"
+      ]
+    },
+    {
+      "id": "register-first-names",
+      "language": "en",
+      "category": "语用语域",
+      "title": "英语默认直呼其名",
+      "layers": {
+        "intuition": {
+          "example": "Hi, Susan —— 对同事甚至上司直接叫名；中文“王经理/李老师”的头衔习惯别平移过去。",
+          "rule": "英语职场与课堂默认 first-name basis（直呼其名），头衔 + 姓只留在正式或有距离感的场景。"
+        },
+        "expansion": "美国职场尤其扁平：对直属上司也叫名（Hi, David），连续邮件里还坚持 Mr. Wang 会显得生分。保留头衔的场景：学术（Professor X）、医疗（Dr. X）、初次接触的客户、明显年长于你的正式场合。不确定时的策略：先用正式版，对方说 Call me Susan / Just Susan is fine 就立即切换。头号平移错误：把“老师”当称呼语——*Hello, Teacher Wang 在英语里不成立（teacher 不是称呼头衔），应说 Hi, Ms. Wang。",
+        "terminology": "称呼语经典研究：Brown & Ford (1961) 论美式英语称呼的“支配-亲密”两维模型；欧洲语言 T/V 代词系统（tu/vous）研究。CEFR CV (2020) 得体性量表。具体场景的默认选择随地区/行业/代际变化，属教学性概括。"
+      },
+      "evidenceLevel": "教学性概括",
+      "sources": [
+        "Brown, R., & Ford, M. (1961). Address in American English. Journal of Abnormal and Social Psychology, 62.",
+        "Council of Europe (2020). CEFR Companion Volume, sociolinguistic appropriateness scale — https://www.coe.int/en/web/common-european-framework-reference-languages"
+      ]
+    }
+  ]
+}

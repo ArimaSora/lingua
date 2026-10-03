@@ -20,6 +20,8 @@ const REMEMBERED_FACT = "用户在学 agent 方向的英语";
 const REPLY_TEXT = "hey! not much, just tinkering with a little agent project. you?";
 const REPLY_TRANSLATION = "嘿！没什么，就是在折腾一个小 agent 项目。你呢？";
 
+let explanationMessageId = "";
+
 let callCount = 0;
 const fakeModel = new MockLanguageModelV4({
   doGenerate: async (options) => {
@@ -41,6 +43,38 @@ const fakeModel = new MockLanguageModelV4({
         usage: {
           inputTokens: { total: 10, noCache: 10, cacheRead: undefined, cacheWrite: undefined },
           outputTokens: { total: 5, text: 5, reasoning: undefined },
+        },
+      };
+    }
+    if (callCount === 4) {
+      // 讲解轮：模型按目录选择条目并调用 lookup_knowledge_entry（issue #12）。
+      return {
+        content: [
+          {
+            type: "tool-call",
+            toolCallId: "call-4",
+            toolName: "lookup_knowledge_entry",
+            input: JSON.stringify({ id: "mindset-tense-marking" }),
+          },
+        ],
+        finishReason: { unified: "tool-calls" as const, raw: undefined },
+        warnings: [],
+        usage: {
+          inputTokens: { total: 10, noCache: 10, cacheRead: undefined, cacheWrite: undefined },
+          outputTokens: { total: 5, text: 5, reasoning: undefined },
+        },
+      };
+    }
+    if (callCount === 5) {
+      const text =
+        "good question! English verbs always carry time info — “see” has to become “saw” for yesterday. 【mindset-tense-marking】";
+      return {
+        content: [{ type: "text", text: `${text}\n${TRANSLATION_MARKER}\n问得好！英语动词必须带时间信息，昨天就得用 saw。【mindset-tense-marking】` }],
+        finishReason: { unified: "stop" as const, raw: undefined },
+        warnings: [],
+        usage: {
+          inputTokens: { total: 10, noCache: 10, cacheRead: undefined, cacheWrite: undefined },
+          outputTokens: { total: 20, text: 20, reasoning: undefined },
         },
       };
     }
@@ -186,6 +220,28 @@ try {
     assert.match(systemsSeen[2]!, /共同兴趣：AI agents/);
   });
 
+  await check("讲解入口：lookup_knowledge_entry 工具接地真实条目并引用条目 ID（issue #12）", async () => {
+    const reply = await postJson(`${api}/api/messages`, {
+      contact: "companion",
+      text: "为什么英语要说 I saw him yesterday，see 不用变形吗？",
+    });
+    assert.equal(callCount, 5, "讲解轮应为两步（tool-call → text）");
+    assert.equal(reply.role, "assistant");
+    assert.match(reply.text, /【mindset-tense-marking】/, "回复必须引用知识条目 ID");
+    // 工具结果直接来自随包种子库的真实条目内容（grounding，非模型编造）。
+    assert.match(systemsSeen[4]!, /英语每个动词都得带上/);
+    assert.match(systemsSeen[4]!, /证据等级：学界共识/);
+    explanationMessageId = reply.id as string;
+  });
+
+  await check("讲解可追溯：投递记录挂消息持久化，含条目 ID + 证据等级 + 层", async () => {
+    const refs = await getJson(`${api}/api/explanations?messageId=${explanationMessageId}`);
+    assert.equal(refs.length, 1);
+    assert.equal(refs[0].entryId, "mindset-tense-marking");
+    assert.equal(refs[0].evidenceLevel, "学界共识");
+    assert.equal(refs[0].layer, 1);
+  });
+
   await check("持久化跨重启：重开服务后消息仍在", async () => {
     const first = server!;
     await first.close();
@@ -194,8 +250,12 @@ try {
     server = reopened;
     try {
       const messages = await getJson(`${base(reopened.port)}/api/messages?contact=companion`);
-      assert.equal(messages.length, 4, "两轮对话的消息应全部保留");
+      assert.equal(messages.length, 6, "三轮对话的消息应全部保留");
       assert.equal(messages[1].translation, REPLY_TRANSLATION);
+      const refs = await getJson(
+        `${base(reopened.port)}/api/explanations?messageId=${explanationMessageId}`,
+      );
+      assert.equal(refs.length, 1, "讲解引用应随数据库跨重启保留");
       const system = await getJson(`${base(reopened.port)}/api/messages?contact=system`);
       assert.equal(system.length, 7, "系统会话不重复播种欢迎文案，课包不重复推送");
       // 重启后 tick：第二课仍待预学完成，不推新课；备份按间隔节流。

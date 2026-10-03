@@ -14,14 +14,6 @@ export {
 export type { Admission, AdmissionOptions, AdmissionPeriod, QuotaAccount } from "./admission";
 export { restoreBackup, runBackup } from "./backup";
 export type { BackupOptions, BackupResult, RestoreOptions } from "./backup";
-export { CEFR_LEVELS, LESSON_KINDS, parseBootstrapPack } from "./bootstrap-pack";
-export type {
-  BootstrapPack,
-  Cefr,
-  LessonKind,
-  PackChunk,
-  PackLesson,
-} from "./bootstrap-pack";
 export {
   openBootstrap,
   PRELEARNING_LIST_CLOSE,
@@ -36,6 +28,14 @@ export type {
   PushedLesson,
   StoredLesson,
 } from "./bootstrap";
+export { CEFR_LEVELS, LESSON_KINDS, parseBootstrapPack } from "./bootstrap-pack";
+export type {
+  BootstrapPack,
+  Cefr,
+  LessonKind,
+  PackChunk,
+  PackLesson,
+} from "./bootstrap-pack";
 export {
   addRelationshipFact,
   characterCardFacts,
@@ -73,10 +73,12 @@ export { FakeClock, SystemClock } from "./clock";
 export type { Clock } from "./clock";
 export { checkConfigPermissions, redactConfig, SECRET_MASK } from "./config-hardening";
 export type { ConfigPermissionReport, ConfigPermissionStatus } from "./config-hardening";
-export { migrate, openDatabase, SCHEMA_VERSION } from "./database";
+export { MIGRATION_VERSIONS, migrate, openDatabase, SCHEMA_VERSION } from "./database";
 export type { Database } from "./database";
 export { renderDigest } from "./digest";
 export type { Digest, DigestOptions } from "./digest";
+export { openExplanationLog } from "./explanation-log";
+export type { ExplanationLog, ExplanationLogOptions, ExplanationRef } from "./explanation-log";
 export { defaultParams, openEventStore } from "./event-store";
 export type {
   Assistance,
@@ -90,6 +92,22 @@ export type {
   Outcome,
   PfaOutcome,
 } from "./event-store";
+export {
+  EVIDENCE_LEVELS,
+  KNOWLEDGE_CATEGORIES,
+  loadKnowledgeEntries,
+  openKnowledgeStore,
+  parseKnowledgeEntries,
+  renderExplanation,
+} from "./knowledge-entry";
+export type {
+  EvidenceLevel,
+  ExplanationLayer,
+  KnowledgeCatalogItem,
+  KnowledgeCategory,
+  KnowledgeEntry,
+  KnowledgeStore,
+} from "./knowledge-entry";
 export { lemmatizeWord, tokenize } from "./lemmatizer";
 export type { Token } from "./lemmatizer";
 export { openMessageStore } from "./message-store";
