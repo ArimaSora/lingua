@@ -2,7 +2,7 @@ import { DatabaseSync } from "node:sqlite";
 
 export type Database = DatabaseSync;
 
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 export function openDatabase(path: string): Database {
   const db = new DatabaseSync(path);
@@ -19,6 +19,8 @@ type Migration = {
 // Schema v1：语块、事件、内容条目、订阅源、角色卡、关系事实、错误日志、
 // 指标事件、学习者档案、参数快照（docs/specs/mvp.md 数据 schema + issue #1）。
 // Schema v2：chunk_occurrences——语块实体与其在内容中的出现记录分离（issue #2）。
+// Schema v3：admission_accounts——额度账户（ADR-0016），入账惰性结算只存
+// 结算进度（last_settled_day）与余额，速率由有效学习历史实时推导。
 // 全部按语言隔离，user_id 预留。
 const MIGRATIONS: Migration[] = [
   {
@@ -178,6 +180,21 @@ const MIGRATIONS: Migration[] = [
         ON chunk_occurrences (chunk_id, content_id);
       CREATE INDEX idx_chunk_occurrences_content
         ON chunk_occurrences (content_id);
+    `,
+  },
+  {
+    version: 3,
+    // 积压闸口带滞后（>30 暂停、≤20 恢复），paused 是状态位，只能落库。
+    sql: `
+      CREATE TABLE admission_accounts (
+        user_id TEXT NOT NULL DEFAULT 'local',
+        language TEXT NOT NULL,
+        balance REAL NOT NULL DEFAULT 0,
+        last_settled_day INTEGER NOT NULL,
+        paused INTEGER NOT NULL DEFAULT 0,
+        updated_at INTEGER NOT NULL,
+        PRIMARY KEY (user_id, language)
+      );
     `,
   },
 ];

@@ -67,7 +67,7 @@ export type ChunkStoreOptions = {
   userId?: string;
 };
 
-type ChunkRow = {
+export type ChunkRow = {
   id: string;
   user_id: string;
   language: string;
@@ -81,7 +81,7 @@ type ChunkRow = {
   created_at: number;
 };
 
-function rowToChunk(row: ChunkRow): Chunk {
+export function rowToChunk(row: ChunkRow): Chunk {
   return {
     id: row.id,
     userId: row.user_id,
