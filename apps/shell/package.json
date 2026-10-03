@@ -7,10 +7,15 @@
     "lingua": "./src/cli.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "smoke": "tsx scripts/smoke.ts",
+    "test": "tsx scripts/smoke.ts"
   },
   "dependencies": {
-    "@lingua/core": "workspace:*"
+    "@ai-sdk/openai-compatible": "^3.0.62",
+    "@lingua/core": "workspace:*",
+    "ai": "^7.0.127",
+    "smol-toml": "^1.9.0"
   },
   "devDependencies": {
     "@types/node": "^24.3.0",

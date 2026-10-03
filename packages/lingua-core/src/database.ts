@@ -2,7 +2,7 @@ import { DatabaseSync } from "node:sqlite";
 
 export type Database = DatabaseSync;
 
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 export function openDatabase(path: string): Database {
   const db = new DatabaseSync(path);
@@ -195,6 +195,25 @@ const MIGRATIONS: Migration[] = [
         updated_at INTEGER NOT NULL,
         PRIMARY KEY (user_id, language)
       );
+    `,
+  },
+  {
+    version: 4,
+    // 双联系人 IM 消息（issue #5）：contact 区分系统/好友角色两个会话；
+    // translation 仅存角色消息的可展开中文翻译（A1–A2 档），其余为 NULL。
+    sql: `
+      CREATE TABLE messages (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL DEFAULT 'local',
+        language TEXT NOT NULL,
+        contact TEXT NOT NULL CHECK (contact IN ('system', 'companion')),
+        role TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
+        text TEXT NOT NULL,
+        translation TEXT,
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX idx_messages_contact
+        ON messages (language, contact, created_at, id);
     `,
   },
 ];

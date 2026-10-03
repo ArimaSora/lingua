@@ -1,5 +1,4 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
 import {
@@ -11,11 +10,9 @@ import {
   SCHEMA_VERSION,
   SystemClock,
 } from "@lingua/core";
-
-// 数据目录默认在仓库外（~/.lingua/），个人学习数据无入库路径。
-export function dataDir(): string {
-  return process.env.LINGUA_DATA_DIR ?? join(homedir(), ".lingua");
-}
+import { dataDir } from "./data-dir";
+import { findConfigPath } from "./config";
+import { DEFAULT_PORT, startServer } from "./server";
 
 // 新建配置文件的模板；完整示例见仓库根目录 config.example.toml。
 // 密钥永不回显：任何配置展示须经 @lingua/core 的 redactConfig 脱敏。
@@ -34,6 +31,7 @@ function usage(): never {
 
 commands:
   init                   初始化数据目录、SQLite schema 与配置文件
+  serve [--port N]       启动 Web Chat（默认端口 ${DEFAULT_PORT}）
   backup [--keep N]      备份数据库（默认保留最近 7 份）
   restore <备份> <目标>  从备份恢复到新位置（目标必须不存在）`);
   process.exit(1);
@@ -68,6 +66,35 @@ switch (command) {
       console.warn(`警告：${report.detail}`);
     } else if (report.status !== "ok") {
       console.log(report.detail);
+    }
+    break;
+  }
+  case "serve": {
+    const { values } = parseArgs({
+      args: rest,
+      options: { port: { type: "string", default: String(DEFAULT_PORT) } },
+    });
+    const port = Number(values.port);
+    if (!Number.isInteger(port) || port <= 0 || port > 65535) {
+      console.error(`非法端口：${values.port}`);
+      process.exit(1);
+    }
+    // 与 init 同一道密钥权限检查（issue #15）：warn 不阻断。
+    const configPath = findConfigPath();
+    if (configPath) {
+      const report = checkConfigPermissions(configPath);
+      if (report.status === "insecure") console.warn(`警告：${report.detail}`);
+    }
+    try {
+      const server = await startServer({ port });
+      console.log(`Lingua Web Chat 已启动：http://localhost:${server.port}`);
+      console.log(`好友角色：${server.card.name}｜数据目录：${dataDir()}`);
+      process.on("SIGINT", () => {
+        void server.close().then(() => process.exit(0));
+      });
+    } catch (error) {
+      console.error((error as Error).message);
+      process.exit(1);
     }
     break;
   }
