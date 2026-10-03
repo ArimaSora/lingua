@@ -15,6 +15,28 @@ export type { Admission, AdmissionOptions, AdmissionPeriod, QuotaAccount } from 
 export { restoreBackup, runBackup } from "./backup";
 export type { BackupOptions, BackupResult, RestoreOptions } from "./backup";
 export {
+  openBootstrap,
+  PRELEARNING_LIST_CLOSE,
+  PRELEARNING_LIST_OPEN,
+  renderLessonPush,
+} from "./bootstrap";
+export type {
+  Bootstrap,
+  BootstrapOptions,
+  CompletedPreLearning,
+  LessonStatus,
+  PushedLesson,
+  StoredLesson,
+} from "./bootstrap";
+export { CEFR_LEVELS, LESSON_KINDS, parseBootstrapPack } from "./bootstrap-pack";
+export type {
+  BootstrapPack,
+  Cefr,
+  LessonKind,
+  PackChunk,
+  PackLesson,
+} from "./bootstrap-pack";
+export {
   addRelationshipFact,
   characterCardFacts,
   getCharacterCard,
@@ -101,3 +123,5 @@ export type { PfaParams } from "./pfa";
 export type { ChunkMastery, Projection, ProjectionMode, SkillMastery } from "./projection";
 export { DEFAULT_SCAFFOLDING_TIER, parseScaffoldingTier, SCAFFOLDING_TIERS, scaffoldingPolicy } from "./scaffolding";
 export type { L1Rescue, ScaffoldingPolicy, ScaffoldingTier } from "./scaffolding";
+export { openScheduler } from "./scheduler";
+export type { Scheduler, SchedulerOptions, SchedulerTask, TaskError, TickReport } from "./scheduler";

@@ -1,0 +1,233 @@
+{
+  "id": "en-bootstrap-a1",
+  "language": "en",
+  "title": "英语零基础 Bootstrap 课包（A1）",
+  "lessons": [
+    {
+      "id": "en-a1-01-first-contact",
+      "title": "First contact：打招呼与开场",
+      "kind": "survival-chunks",
+      "hook": "AI 社区里认识人的第一句话都在这一课——今天就能用上一句。",
+      "body": "— Hi Maya! How's it going?\n— Pretty good, thanks. And you?\n— Good, thanks. Nice to meet you!\n— Nice to meet you too.\n— Oh, sorry — I have to go.\n— It doesn't matter. See you around!\n— See you! Thanks a lot.",
+      "chunks": [
+        {
+          "form": "how's it going",
+          "chunkType": "idiom",
+          "cefr": "A2",
+          "example": "Hi Ben! How's it going?",
+          "intuition": "熟人见面随口一问，不是真提问——回 “pretty good, you?” 就完成社交任务。"
+        },
+        {
+          "form": "nice to meet you",
+          "chunkType": "idiom",
+          "cefr": "A1",
+          "example": "I'm Ben. Nice to meet you!",
+          "intuition": "第一次见面的固定一句；之后再见就说 “nice to see you”。"
+        },
+        {
+          "form": "thanks a lot",
+          "chunkType": "collocation",
+          "cefr": "A1",
+          "example": "Thanks a lot for the link!",
+          "intuition": "比 “thank you” 热一度，网聊里最常用的道谢。"
+        },
+        {
+          "form": "it doesn't matter",
+          "chunkType": "idiom",
+          "cefr": "A2",
+          "example": "— Sorry I'm late. — It doesn't matter.",
+          "intuition": "道歉的标准回应：这事不要紧，整句背下来。"
+        },
+        {
+          "form": "see you around",
+          "chunkType": "idiom",
+          "cefr": "A2",
+          "example": "I have to go. See you around!",
+          "intuition": "不约具体时间的道别，around 让语气变轻松。"
+        }
+      ]
+    },
+    {
+      "id": "en-a1-02-rescue",
+      "title": "日常救场：卡住怎么办",
+      "kind": "survival-chunks",
+      "hook": "读不懂、要打断、想请人帮忙——这五句是你的救生圈。",
+      "body": "— Excuse me, what do you mean?\n— I mean the post is too hard.\n— Oh. Never mind, I'll find an easy one.\n— Could you send me the link?\n— Sure. What are you looking for?\n— I'm looking for a post about agents.",
+      "chunks": [
+        {
+          "form": "excuse me",
+          "chunkType": "idiom",
+          "cefr": "A1",
+          "example": "Excuse me, what do you mean?",
+          "intuition": "打断或求助前先垫这一句，就不算失礼。"
+        },
+        {
+          "form": "what do you mean",
+          "chunkType": "idiom",
+          "cefr": "A2",
+          "example": "What do you mean, “too hard”?",
+          "intuition": "没听懂就直接问：mean = “意思是”。"
+        },
+        {
+          "form": "never mind",
+          "chunkType": "idiom",
+          "cefr": "A2",
+          "example": "Never mind, I found it.",
+          "intuition": "“算了 / 没事了”——撤回上一个问题或请求。"
+        },
+        {
+          "form": "could you",
+          "chunkType": "collocation",
+          "cefr": "A2",
+          "slotPattern": "could you ___",
+          "example": "Could you send me the link?",
+          "intuition": "请人的标准句型：could you + 动词原形，客气一度。"
+        },
+        {
+          "form": "look for",
+          "chunkType": "collocation",
+          "cefr": "A2",
+          "slotPattern": "look for ___",
+          "example": "I'm looking for a post about agents.",
+          "intuition": "“找”挂成 look for：for 不能丢，找的东西放最后。"
+        }
+      ]
+    },
+    {
+      "id": "en-a1-03-sentence-patterns",
+      "title": "说出你的状态：五个万能句构",
+      "kind": "sentence-patterns",
+      "hook": "学会这五个框，你已经能说几十句自己的话——比如 “I want to build an agent”。",
+      "body": "英语说自己的状态，就是把词挂进固定的框。\nI like sci-fi.（喜欢什么，直接挂）\nI want to build an agent.（想做什么，to + 动词）\nI need to finish this post.（要做什么，也是 to + 动词）\nThere is a new post today.（“有”，用 there is 起头）\nLet me check it.（“让我来”，let me + 动词）",
+      "chunks": [
+        {
+          "form": "I like",
+          "chunkType": "collocation",
+          "cefr": "A1",
+          "slotPattern": "I like ___",
+          "example": "I like sci-fi movies.",
+          "intuition": "like 后面直接挂东西，不用加 “很”。"
+        },
+        {
+          "form": "I want to",
+          "chunkType": "collocation",
+          "cefr": "A1",
+          "slotPattern": "I want to ___",
+          "example": "I want to build an agent.",
+          "intuition": "想做 = want to + 动词原形，to 不能丢。"
+        },
+        {
+          "form": "I need to",
+          "chunkType": "collocation",
+          "cefr": "A1",
+          "slotPattern": "I need to ___",
+          "example": "I need to finish this post.",
+          "intuition": "和 want to 同构：need to + 动词，语气是 “得做”。"
+        },
+        {
+          "form": "there is",
+          "chunkType": "collocation",
+          "cefr": "A1",
+          "slotPattern": "there is ___",
+          "variants": ["there are"],
+          "example": "There is a new post today.",
+          "intuition": "说 “有” 不用 have：there is + 单数，there are + 复数。"
+        },
+        {
+          "form": "let me",
+          "chunkType": "collocation",
+          "cefr": "A2",
+          "slotPattern": "let me ___",
+          "example": "Let me check it.",
+          "intuition": "“让我来 / 我看看”：let me + 动词原形，网聊高频。"
+        }
+      ]
+    },
+    {
+      "id": "en-a1-04-graded-text-1",
+      "title": "A new post：一篇新帖子",
+      "kind": "graded-text",
+      "hook": "你的好友角色发来一篇帖子——用前三课的语块就能读懂。",
+      "body": "Hi! How's it going? There is a new post on my blog. It is about small programs that work for you. It is short, but I like it a lot.\n\n“Agents can read posts for you. They can also talk to you, like a friend. Of course, they are not people. But they can help you learn.”\n\nBy the way, the writer has a lot of good posts. I want to find out more about her work. Let me send you the link.",
+      "chunks": [
+        {
+          "form": "a lot of",
+          "chunkType": "collocation",
+          "cefr": "A1",
+          "slotPattern": "a lot of ___",
+          "example": "The writer has a lot of good posts.",
+          "intuition": "“很多”：a lot of + 名词，口语里最常用的量词。"
+        },
+        {
+          "form": "of course",
+          "chunkType": "idiom",
+          "cefr": "A2",
+          "example": "Of course, they are not people.",
+          "intuition": "“当然”——句首句中都能放，自带一点 “这不是明摆着吗” 的语气。"
+        },
+        {
+          "form": "by the way",
+          "chunkType": "idiom",
+          "cefr": "A2",
+          "example": "By the way, the writer has more posts.",
+          "intuition": "话锋一转的标记：想起什么就顺手插上。"
+        },
+        {
+          "form": "find out",
+          "chunkType": "collocation",
+          "cefr": "A2",
+          "slotPattern": "find out ___",
+          "example": "I want to find out more about her work.",
+          "intuition": "“弄清楚 / 去发掘”：find out + 想知道的事。"
+        }
+      ]
+    },
+    {
+      "id": "en-a1-05-graded-text-2",
+      "title": "Your first agent：你的第一个 agent",
+      "kind": "graded-text",
+      "hook": "你一直想要的 agent，其实可以从 “每天跟你说早安” 开始。",
+      "body": "Do you want your own agent? It is not hard. Start small.\n\nFirst, turn on your computer. For example, your agent can say “good morning” to you every day. It can read one post and tell you the ideas. Then you talk about it, like friends.\n\nIt takes ten minutes a day. Make sure it is fun for you — have fun first, learn second. Day one is easy. Day two is easier. I want to see your agent!",
+      "chunks": [
+        {
+          "form": "for example",
+          "chunkType": "idiom",
+          "cefr": "A1",
+          "example": "For example, your agent can say “good morning”.",
+          "intuition": "举例子用它起头，书面口语通吃。"
+        },
+        {
+          "form": "turn on",
+          "chunkType": "collocation",
+          "cefr": "A2",
+          "slotPattern": "turn on ___",
+          "example": "Turn on your computer.",
+          "intuition": "打开电器用 turn on；关掉是 turn off，一对记。"
+        },
+        {
+          "form": "it takes",
+          "chunkType": "collocation",
+          "cefr": "A2",
+          "slotPattern": "it takes ___",
+          "example": "It takes ten minutes a day.",
+          "intuition": "“花费（时间）”：it takes + 时长，主语永远是 it。"
+        },
+        {
+          "form": "make sure",
+          "chunkType": "collocation",
+          "cefr": "A2",
+          "slotPattern": "make sure ___",
+          "example": "Make sure it is fun for you.",
+          "intuition": "“确保 / 务必”：叮嘱别人和提醒自己都用它。"
+        },
+        {
+          "form": "have fun",
+          "chunkType": "collocation",
+          "cefr": "A1",
+          "example": "Have fun with it!",
+          "intuition": "祝福标配：玩的时候、试新东西的时候都能说。"
+        }
+      ]
+    }
+  ]
+}

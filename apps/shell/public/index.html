@@ -202,6 +202,35 @@
     void refreshMessages();
   }
 
+  // 系统推送的预学清单标记（@lingua/core bootstrap）：标记内首行是折叠摘要，
+  // 其余为清单本体（每条语块只有例句 + 一句直觉规律，默认只给这层）。
+  const PRELEARNING_OPEN = "[[预学清单]]";
+  const PRELEARNING_CLOSE = "[[/预学清单]]";
+
+  function appendTextWithPrelearning(bubble, text) {
+    const openIndex = text.indexOf(PRELEARNING_OPEN);
+    const closeIndex = text.indexOf(PRELEARNING_CLOSE);
+    if (openIndex === -1 || closeIndex <= openIndex) {
+      bubble.textContent = text;
+      return;
+    }
+    const before = text.slice(0, openIndex).trim();
+    const inner = text.slice(openIndex + PRELEARNING_OPEN.length, closeIndex).trim();
+    const after = text.slice(closeIndex + PRELEARNING_CLOSE.length).trim();
+    const lines = inner.split("\n");
+    const beforeEl = document.createElement("div");
+    beforeEl.textContent = before;
+    const details = document.createElement("details");
+    const summary = document.createElement("summary");
+    summary.textContent = lines[0] || "预学清单";
+    const body = document.createElement("div");
+    body.textContent = lines.slice(1).join("\n");
+    details.append(summary, body);
+    const afterEl = document.createElement("div");
+    afterEl.textContent = after;
+    bubble.append(beforeEl, details, afterEl);
+  }
+
   function renderMessage(message) {
     if (renderedIds.has(message.id)) return;
     renderedIds.add(message.id);
@@ -209,7 +238,7 @@
     row.className = `row ${message.role}`;
     const bubble = document.createElement("div");
     bubble.className = "bubble";
-    bubble.textContent = message.text;
+    appendTextWithPrelearning(bubble, message.text);
     if (message.translation) {
       // 可展开中文翻译（A1–A2 支架档）：默认折叠，点开即读。
       const details = document.createElement("details");

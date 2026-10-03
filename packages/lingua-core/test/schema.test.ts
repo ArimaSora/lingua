@@ -16,6 +16,7 @@ describe("schema", () => {
     expect(tables).toEqual(
       expect.arrayContaining([
         "admission_accounts",
+        "bootstrap_lessons",
         "character_cards",
         "chunk_occurrences",
         "chunks",
@@ -29,6 +30,7 @@ describe("schema", () => {
         "metric_events",
         "param_snapshots",
         "relationship_facts",
+        "scheduler_tasks",
         "schema_migrations",
       ]),
     );
@@ -82,6 +84,36 @@ describe("schema", () => {
       "language",
     ]) {
       expect(occurrenceColumns).toContain(column);
+    }
+  });
+
+  it("tracks bootstrap lesson push state and scheduler task last-run (issue #6)", () => {
+    const db = openDatabase(":memory:");
+    migrate(db);
+
+    const lessonColumns = db
+      .prepare("PRAGMA table_info(bootstrap_lessons)")
+      .all()
+      .map((row) => (row as { name: string }).name);
+    for (const column of [
+      "pack_id",
+      "seq",
+      "hook",
+      "chunks",
+      "chunk_ids",
+      "status",
+      "user_id",
+      "language",
+    ]) {
+      expect(lessonColumns).toContain(column);
+    }
+
+    const taskColumns = db
+      .prepare("PRAGMA table_info(scheduler_tasks)")
+      .all()
+      .map((row) => (row as { name: string }).name);
+    for (const column of ["task_id", "last_run_at"]) {
+      expect(taskColumns).toContain(column);
     }
   });
 });
