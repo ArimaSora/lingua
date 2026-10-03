@@ -2,12 +2,19 @@
 // 票 06 起承担 Bootstrap 课包预学完成的确认入口；订阅管理/小结属后续票据，
 // 其余回复为固定文案，不经过任何模型。
 
-import type { Bootstrap } from "@lingua/core";
+import type { Bootstrap, ContentPipeline } from "@lingua/core";
 
 export const SYSTEM_CONTACT_NAME = "系统";
 
 export const SYSTEM_WELCOME =
   "系统已上线。我负责订阅管理、内容推送与学习小结（随后续版本开通）。日常对话请找好友角色。";
+
+const URL_RE = /https?:\/\/[^\s]+/;
+
+function findUrl(text: string): string | null {
+  const match = URL_RE.exec(text);
+  return match ? match[0] : null;
+}
 
 export function systemReply(_userText: string): string {
   return (
@@ -27,6 +34,7 @@ function isPrelearningDone(text: string): boolean {
 export function handleSystemMessage(input: {
   text: string;
   bootstrap: Bootstrap;
+  pipeline: ContentPipeline;
   language: string;
 }): string {
   if (isPrelearningDone(input.text)) {
@@ -39,5 +47,33 @@ export function handleSystemMessage(input: {
       "好友角色会在之后的聊天里自然用上它们；下一课稍后推送。"
     );
   }
+
+  const url = findUrl(input.text);
+  if (url) {
+    // handleSystemMessage 是同步入口；调用方负责 await 并持久化回复。
+    throw new SystemUrlIntentError(url);
+  }
+
   return systemReply(input.text);
+}
+
+// 系统联系人收到 URL 时抛出此异常，由 server.ts 捕获后异步处理 pipeline。
+export class SystemUrlIntentError extends Error {
+  url: string;
+
+  constructor(url: string) {
+    super(`系统联系人收到链接：${url}`);
+    this.url = url;
+  }
+}
+
+export function formatIngestReply(result: Awaited<ReturnType<ContentPipeline["ingest"]>>): string {
+  if (result.kind === "simplified") {
+    const title = result.simplified?.title ?? "简化版";
+    return `已生成简化版（${result.unlockLabel ?? `原文难度约 ${result.level}`}）：${title}\n原文链接：${result.original.sourceUrl}`;
+  }
+  if (result.kind === "unlock_queued") {
+    return `已收入解锁队列，${result.unlockLabel}。等你的水平到位后会主动推送。`;
+  }
+  return `已收到链接，难度约 ${result.level}，可直接阅读。`;
 }

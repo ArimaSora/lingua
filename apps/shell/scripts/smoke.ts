@@ -7,10 +7,10 @@ import { openEventStore, SystemClock } from "@lingua/core";
 import { TRANSLATION_MARKER } from "../src/agent";
 import { startServer } from "../src/server";
 
-// 假模型 e2e 冒烟（issue #5 + #6）：无 API key 环境下证明完整链路——
+// 假模型 e2e 冒烟（issue #5 + #6 + #10）：无 API key 环境下证明完整链路——
 // 双联系人列表、工具循环（remember_fact 写策展事实）、digest 注入下一轮 prompt、
-// 翻译标记拆分与可展开渲染数据、系统联系人纯工具文案、SQLite 持久化（跨重启）、
-// Bootstrap 课包推送（调度器 tick）与预学完成闭环。
+// 翻译标记拆分与可展开渲染数据、系统联系人链接入口（正文抓取 → 难度管道 → 分流）、
+// SQLite 持久化（跨重启）、Bootstrap 课包推送（调度器 tick）与预学完成闭环。
 // 运行：pnpm --filter @lingua/shell smoke
 
 const dir = mkdtempSync(join(tmpdir(), "lingua-smoke-"));
@@ -21,6 +21,19 @@ const REPLY_TEXT = "hey! not much, just tinkering with a little agent project. y
 const REPLY_TRANSLATION = "嘿！没什么，就是在折腾一个小 agent 项目。你呢？";
 
 let explanationMessageId = "";
+
+// 票 10：系统会话链接入口的 fake 依赖（避免真实网络与模型调用）。
+const EASY_BODY = "I am big and you are small.";
+const HARD_BODY = "Government increase substantial however ubiquitous.";
+const fakeExtractor = async (url: string) => {
+  if (url.includes("/2026/")) return { title: "Hard News", body: HARD_BODY };
+  if (url.includes("/essays/")) return { title: "Hard Essay", body: HARD_BODY };
+  return { title: "Easy Article", body: EASY_BODY };
+};
+const fakeSimplifier = async ({ body, url }: { body: string; url: string }) => ({
+  title: "简化版",
+  body: `[简化版] ${body}\n原文链接：${url}`,
+});
 
 let callCount = 0;
 const fakeModel = new MockLanguageModelV4({
@@ -114,7 +127,13 @@ async function postJson(url: string, body: unknown): Promise<any> {
 
 let server: Awaited<ReturnType<typeof startServer>> | undefined;
 try {
-  server = await startServer({ dataDir: dir, port: 0, model: fakeModel });
+  server = await startServer({
+    dataDir: dir,
+    port: 0,
+    model: fakeModel,
+    extractor: fakeExtractor,
+    simplifier: fakeSimplifier,
+  });
   const api = base(server.port);
 
   await check("联系人列表恰为系统 + 好友角色", async () => {
@@ -173,17 +192,46 @@ try {
     assert.equal(messages[1].translation, REPLY_TRANSLATION);
   });
 
-  await check("系统联系人：纯工具文案，不触发模型调用", async () => {
+  await check("系统联系人：普通链接走内容管道，不触发模型调用", async () => {
     const reply = await postJson(`${api}/api/messages`, {
       contact: "system",
       text: "https://example.com/feed.xml",
     });
     assert.equal(reply.role, "assistant");
-    assert.match(reply.text, /工具通道/);
+    assert.match(reply.text, /已收到链接/);
     assert.equal(callCount, 2, "系统会话不得经过模型");
     const messages = await getJson(`${api}/api/messages?contact=system`);
     assert.equal(messages.length, 4, "欢迎文案 + 第一课推送 + 用户消息 + 系统回复");
     assert.match(messages[0].text, /系统已上线/);
+  });
+
+  await check("系统联系人：常青难文进解锁队列，标签「原文难度约 X」", async () => {
+    const reply = await postJson(`${api}/api/messages`, {
+      contact: "system",
+      text: "https://example.com/essays/attention",
+    });
+    assert.equal(reply.role, "assistant");
+    assert.match(reply.text, /已收入解锁队列/);
+    assert.match(reply.text, /原文难度约/);
+    assert.equal(callCount, 2, "解锁队列入队不经过模型");
+
+    const queue = server!.pipeline.listUnlockQueue();
+    assert.equal(queue.length, 1);
+    assert.match(queue[0]!.unlockLabel, /原文难度约/);
+  });
+
+  await check("系统联系人：易腐难文走简化版出路，不进解锁队列", async () => {
+    const reply = await postJson(`${api}/api/messages`, {
+      contact: "system",
+      text: "https://news.example.com/2026/10/03/agent-release",
+    });
+    assert.equal(reply.role, "assistant");
+    assert.match(reply.text, /已生成简化版/);
+    assert.match(reply.text, /原文链接：/);
+    assert.equal(callCount, 2, "fake 简化器不经过模型");
+
+    const queue = server!.pipeline.listUnlockQueue();
+    assert.equal(queue.length, 1, "简化版不进解锁队列");
   });
 
   await check("预学完成闭环：回「完成」记 initial-learning，tick 推下一课", async () => {
@@ -209,8 +257,8 @@ try {
     const report = server!.scheduler.tick();
     assert.ok(report.ran.includes("bootstrap-push"));
     const messages = await getJson(`${api}/api/messages?contact=system`);
-    assert.equal(messages.length, 7, "再 + 用户「完成」+ 完成回执 + 第二课推送");
-    assert.match(messages[6].text, /【Bootstrap 课包 · 第 2\/5 课】日常救场/);
+    assert.equal(messages.length, 11, "欢迎+第一课+三个链接往返+完成往返+第二课推送");
+    assert.match(messages[10].text, /【Bootstrap 课包 · 第 2\/5 课】日常救场/);
   });
 
   await check("工具写入的策展事实经 digest 注入下一轮 prompt", async () => {
@@ -257,7 +305,11 @@ try {
       );
       assert.equal(refs.length, 1, "讲解引用应随数据库跨重启保留");
       const system = await getJson(`${base(reopened.port)}/api/messages?contact=system`);
-      assert.equal(system.length, 7, "系统会话不重复播种欢迎文案，课包不重复推送");
+      assert.equal(
+        system.length,
+        11,
+        "系统会话不重复播种欢迎文案，课包不重复推送，链接历史保留",
+      );
       // 重启后 tick：第二课仍待预学完成，不推新课；备份按间隔节流。
       const report = reopened.scheduler.tick();
       assert.equal(

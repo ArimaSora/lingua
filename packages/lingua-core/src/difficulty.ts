@@ -20,8 +20,8 @@ export type Perishability = "perishable" | "evergreen";
 export type DifficultyInput = {
   text: string;
   // 可选元数据：时效判断的补充信号（启发式兜底与 tagger 均可用）。
-  url?: string;
-  publishedAt?: number;
+  url?: string | undefined;
+  publishedAt?: number | undefined;
 };
 
 export type DifficultyAssessment = {
@@ -54,9 +54,9 @@ export type DifficultyPipelineOptions = {
   grader?: CoarseGrader | null;
   tagger?: PerishabilityTagger | null;
   // L1 解锁级阈值，默认 0.95（ADR-0012）。
-  coverageThreshold?: number;
+  coverageThreshold?: number | undefined;
   // L2 平均句长上限（仅约束 A1），默认 12 词。
-  maxA1SentenceLength?: number;
+  maxA1SentenceLength?: number | undefined;
 };
 
 export type DifficultyPipeline = {

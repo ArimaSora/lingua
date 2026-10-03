@@ -91,6 +91,18 @@ describe("schema", () => {
     const db = openDatabase(":memory:");
     migrate(db);
 
+    const contentColumns = db
+      .prepare("PRAGMA table_info(content_items)")
+      .all()
+      .map((row) => (row as { name: string }).name);
+    for (const column of [
+      "expires_at",
+      "simplified_source_id",
+      "pipeline_status",
+    ]) {
+      expect(contentColumns).toContain(column);
+    }
+
     const lessonColumns = db
       .prepare("PRAGMA table_info(bootstrap_lessons)")
       .all()

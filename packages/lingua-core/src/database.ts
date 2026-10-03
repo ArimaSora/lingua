@@ -2,7 +2,7 @@ import { DatabaseSync } from "node:sqlite";
 
 export type Database = DatabaseSync;
 
-export const SCHEMA_VERSION = 6;
+export const SCHEMA_VERSION = 8;
 
 export function openDatabase(path: string): Database {
   const db = new DatabaseSync(path);
@@ -280,6 +280,20 @@ const MIGRATIONS: Migration[] = [
       );
       CREATE INDEX idx_explanation_refs_message
         ON explanation_refs (message_id, created_at, id);
+    `,
+  },
+  {
+    version: 8,
+    // 链接粘贴、正文抓取与难度管道（issue #10）：
+    // content_items 增加分流状态、过期时间、简化版关联；
+    // 与票 07 的 status 列扩展解耦，使用 pipeline_status 避免并发冲突。
+    sql: `
+      ALTER TABLE content_items ADD COLUMN expires_at INTEGER;
+      ALTER TABLE content_items ADD COLUMN simplified_source_id TEXT;
+      ALTER TABLE content_items ADD COLUMN pipeline_status TEXT NOT NULL DEFAULT 'inbox'
+        CHECK (pipeline_status IN ('inbox','unlock_queued','simplified','dismissed'));
+      CREATE INDEX idx_content_items_pipeline_status
+        ON content_items (user_id, language, pipeline_status, created_at);
     `,
   },
 ];
