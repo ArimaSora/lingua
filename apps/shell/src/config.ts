@@ -2,10 +2,11 @@ import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { parse as parseToml } from "smol-toml";
+import { dataDir } from "./data-dir";
 
 // 壳层配置（TOML）：主模型的 OpenAI 兼容配置项（ADR-0010）。
 // config.toml 永不入库（.gitignore），查找顺序：
-// LINGUA_CONFIG 环境变量 → ./config.toml → ~/.lingua/config.toml。
+// LINGUA_CONFIG 环境变量 → ./config.toml → 数据目录/config.toml（lingua init 生成处）。
 
 export type MainModelConfig = {
   provider: string;
@@ -26,7 +27,7 @@ export function resolveHome(path: string): string {
 
 export function findConfigPath(): string | null {
   if (process.env.LINGUA_CONFIG) return resolve(process.env.LINGUA_CONFIG);
-  for (const candidate of [resolve("config.toml"), join(homedir(), ".lingua", "config.toml")]) {
+  for (const candidate of [resolve("config.toml"), join(dataDir(), "config.toml")]) {
     if (existsSync(candidate)) return candidate;
   }
   return null;

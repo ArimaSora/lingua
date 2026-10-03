@@ -38,12 +38,12 @@ pnpm lingua init # 初始化数据目录与 SQLite schema（默认 ~/.lingua/，
 IM 界面里有两个联系人：**系统**（纯工具文案，无人格）与**好友角色**（默认 Maya，网聊风格英语朋友）。
 
 ```bash
-cp config.example.toml config.toml   # 填入 [models.main] 的 api_key（如 DeepSeek key）
-pnpm lingua serve                    # 启动 Web Chat，默认 http://localhost:3939（--port 可改）
+pnpm lingua init        # 生成数据目录、schema 与 config.toml 模板（填入 [models.main] 的 api_key，如 DeepSeek key）
+pnpm lingua serve       # 启动 Web Chat，默认 http://localhost:3939（--port 可改）
 ```
 
-- 配置查找顺序：`LINGUA_CONFIG` 环境变量 → `./config.toml` → `~/.lingua/config.toml`；config.toml 已 gitignore，永不入库。
-- 消息持久化在数据目录的 SQLite（schema v3 起含 `messages` 表），重启不丢。
+- 配置查找顺序：`LINGUA_CONFIG` 环境变量 → `./config.toml` → 数据目录下的 `config.toml`（`lingua init` 生成处，默认 `~/.lingua/`）；config.toml 已 gitignore，永不入库。
+- 消息持久化在数据目录的 SQLite（schema v4 起含 `messages` 表），重启不丢。
 - A1–A2 支架档（默认）：角色每条英文消息附**可展开中文翻译**（点开「中文翻译」即读）；档位规则在 lingua-core（`scaffoldingPolicy`），B1 及以上不附翻译。
 - 角色卡：首次启动把内置默认卡写入数据库；把自定义卡片 JSON 放到 `~/.lingua/companion.json` 即可在下个全新数据目录生效（字段见 `apps/shell/cards/default-companion.json`：人格基底 + 兴趣层 + 母语支架档位 + 语域范围 + 语言对）。
 
