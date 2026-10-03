@@ -104,12 +104,14 @@ function resolveAdmitted(
     ).map((row) => row.voids_event_id),
   );
 
+  // 版本链按 (observation_id, chunk_id) 维护，避免一次用户消息含多个语块时互相覆盖。
   const byObservation = new Map<string, LearningEvent[]>();
   for (const row of versions) {
     const event = rowToLearningEvent(row);
-    const chain = byObservation.get(event.observationId) ?? [];
+    const key = `${event.observationId}:${event.chunkId ?? ""}`;
+    const chain = byObservation.get(key) ?? [];
     chain.push(event);
-    byObservation.set(event.observationId, chain);
+    byObservation.set(key, chain);
   }
 
   const admitted: LearningEvent[] = [];

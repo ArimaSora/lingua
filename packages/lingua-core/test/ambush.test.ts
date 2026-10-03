@@ -1,12 +1,17 @@
 import { describe, expect, it } from "vitest";
 import {
+  AMBUSH_HIT_METRIC,
   AMBUSH_REPEAT_WINDOW_MS,
+  createJudge,
   MAX_AMBUSH_CHUNKS,
   MAX_BURIALS_IN_WINDOW,
   MAX_TOPICS_PER_DAY,
   openAmbush,
+  openBootstrap,
   STALE_TOPIC_MS,
+  TOPIC_RESPONSE_METRIC,
 } from "../src/index";
+import type { UsageJudge, UsageVerdict } from "../src/index";
 import {
   DAY,
   HOUR,
@@ -30,10 +35,10 @@ function makeDue(
 ): void {
   const { db, store } = harness;
   for (const id of ids) {
-    insertChunk(db, id, {
-      form: options.forms?.[id],
-      sourceContentId: options.sources?.[id],
-    });
+    const chunkOptions: Parameters<typeof insertChunk>[2] = {};
+    if (options.forms?.[id] !== undefined) chunkOptions.form = options.forms[id];
+    if (options.sources?.[id] !== undefined) chunkOptions.sourceContentId = options.sources[id];
+    insertChunk(db, id, chunkOptions);
     // 首次到期 = 预学次日（ADR-0016）。
     store.recordInitialLearning({
       observationId: `prelearn-${id}`,
@@ -219,5 +224,162 @@ describe("planAmbushTopic：不泄题硬规则（ADR-0013）", () => {
 
     clock.set(T0 + 2 * DAY);
     expect(() => ambush.planAmbushTopic("en")).toThrow(/泄题|leak/i);
+  });
+});
+
+function fakeUsageJudge(verdict: UsageVerdict): UsageJudge {
+  return {
+    name: "fake-usage",
+    version: "0.1",
+    async judgeUsage() {
+      return verdict;
+    },
+  };
+}
+
+describe("埋伏闭环：Judge + 事件 + 状态（issue #7 验收）", () => {
+  it("e2e: 课包预学 → 角色埋伏起话题 → 用户产出 → 事件记录 → 状态更新 → 再次到期后被复用", async () => {
+    const harness = makeHarness();
+    const { db, clock, store } = harness;
+    const bootstrap = openBootstrap({ db, clock });
+
+    bootstrap.seedPack({
+      id: "pack-e2e",
+      language: "en",
+      title: "E2E Pack",
+      lessons: [
+        {
+          id: "lesson-e2e-1",
+          title: "First contact：打招呼与开场",
+          kind: "survival-chunks",
+          hook: "认识人的第一句话",
+          body: "A: Hi! How's it going? B: Nice to meet you.",
+          chunks: [
+            {
+              form: "how's it going",
+              chunkType: "collocation",
+              cefr: "A1",
+              variants: [],
+              slotPattern: null,
+              example: "How's it going?",
+              intuition: "熟人见面时的轻松问候，相当于「最近怎么样」。",
+            },
+            {
+              form: "nice to meet you",
+              chunkType: "collocation",
+              cefr: "A1",
+              variants: [],
+              slotPattern: null,
+              example: "Nice to meet you!",
+              intuition: "初次见面表示高兴，语气友好。",
+            },
+          ],
+        },
+      ],
+    });
+
+    const pushed = bootstrap.pushNextLesson("en")!;
+    expect(pushed.chunkIds).toHaveLength(2);
+    const chunkId = (
+      db
+        .prepare("SELECT id FROM chunks WHERE canonical_form = ?")
+        .get("how's it going") as { id: string }
+    ).id;
+    expect(pushed.chunkIds).toContain(chunkId);
+    bootstrap.completePreLearning("en");
+
+    // 预学次日到期。
+    clock.set(T0 + 2 * DAY);
+    const ambush = openAmbush({ db, clock });
+    const plan = ambush.planAmbushTopic("en")!;
+    expect(plan.chunkIds).toContain(chunkId);
+    expect(plan.prompt.toLowerCase()).not.toContain("how's it going");
+
+    const judge = createJudge({ db, usageJudge: fakeUsageJudge({ outcome: "correct", confidence: 0.92 }) });
+    const resolved = await ambush.resolveTopic({
+      topicId: plan.topicId,
+      userText: "I'm doing great, how's it going with you?",
+      judge,
+      store,
+    });
+
+    const hit = resolved.placements.find((p) => p.chunkId === chunkId);
+    expect(hit?.outcome).toBe("hit");
+
+    // 事件记录：命中语块独立产出，未命中语块记 no-evidence。
+    const events = db
+      .prepare("SELECT event_type, outcome, assistance FROM events WHERE event_type != 'initial-learning' ORDER BY recorded_at, event_id")
+      .all() as unknown as { event_type: string; outcome: string; assistance: string | null }[];
+    expect(events).toEqual([
+      { event_type: "independent-production", outcome: "correct", assistance: "none" },
+      { event_type: "no-evidence", outcome: "not-produced", assistance: null },
+    ]);
+
+    // 状态更新：chunk 被 FSRS 推进，掌握度变化。
+    const after = store.currentBeliefAt(clock.now());
+    const chunkAfter = after.chunks.find((c) => c.chunkId === chunkId)!;
+    expect(chunkAfter.admittedEvidence).toBe(1);
+    expect(chunkAfter.dueAt).toBeGreaterThan(clock.now());
+
+    // 命中率与回应率落库。
+    const metrics = db
+      .prepare("SELECT metric_name, value FROM metric_events ORDER BY created_at, metric_name")
+      .all() as unknown as { metric_name: string; value: number }[];
+    expect(metrics).toContainEqual({ metric_name: AMBUSH_HIT_METRIC, value: 1 });
+    expect(metrics).toContainEqual({ metric_name: TOPIC_RESPONSE_METRIC, value: 1 });
+
+    // 推进到新的到期日，角色再次埋入同一语块。
+    clock.set(chunkAfter.dueAt! + HOUR);
+    const plan2 = ambush.planAmbushTopic("en")!;
+    expect(plan2.chunkIds).toContain(chunkId);
+  });
+
+  it("用户用替代正确表达完成交流 = 未获得证据，状态不变、命中率下降（ADR-0013）", async () => {
+    const harness = makeHarness();
+    const { db, clock, store } = harness;
+    makeDue(harness, ["c1", "c2"], { forms: { c1: "look for", c2: "see you around" } });
+
+    clock.set(T0 + 2 * DAY);
+    const ambush = openAmbush({ db, clock });
+    const plan = ambush.planAmbushTopic("en")!;
+    expect(plan.chunkIds).toContain("c1");
+
+    const before = store.currentBeliefAt(clock.now());
+    const chunkBefore = before.chunks.find((c) => c.chunkId === "c1")!;
+
+    // 用户没用 look for，但用替代表达完成了交际。
+    const judge = createJudge({ db, usageJudge: fakeUsageJudge({ outcome: "correct", confidence: 0.9 }) });
+    const resolved = await ambush.resolveTopic({
+      topicId: plan.topicId,
+      userText: "I found a great article about agents.",
+      judge,
+      store,
+    });
+
+    const placement = resolved.placements.find((p) => p.chunkId === "c1")!;
+    expect(placement.outcome).toBe("missed");
+    expect(placement.verdict.outcome).toBe("not-produced");
+
+    // 未获得证据：状态不变（dueAt 不变）。
+    const after = store.currentBeliefAt(clock.now());
+    const chunkAfter = after.chunks.find((c) => c.chunkId === "c1")!;
+    expect(chunkAfter.dueAt).toBe(chunkBefore.dueAt);
+
+    // 未获得证据：两个语块都记 no-evidence 事件，但不更新状态、不记失败。
+    const nonInitial = db
+      .prepare("SELECT event_type, outcome, assistance FROM events WHERE event_type != 'initial-learning' ORDER BY event_id")
+      .all() as unknown as { event_type: string; outcome: string | null; assistance: string | null }[];
+    expect(nonInitial).toEqual([
+      { event_type: "no-evidence", outcome: "not-produced", assistance: null },
+      { event_type: "no-evidence", outcome: "not-produced", assistance: null },
+    ]);
+
+    // 命中率下降：该语块的 ambush-hit = 0。
+    const hits = db
+      .prepare(
+        "SELECT value FROM metric_events WHERE metric_name = ? AND json_extract(payload, '$.chunkId') = ?",
+      )
+      .all(AMBUSH_HIT_METRIC, "c1") as unknown as { value: number }[];
+    expect(hits.map((r) => r.value)).toEqual([0]);
   });
 });
