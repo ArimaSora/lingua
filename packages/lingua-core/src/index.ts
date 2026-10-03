@@ -118,6 +118,34 @@ export type {
   MessageStore,
   MessageStoreOptions,
 } from "./message-store";
+export {
+  AMBUSH_REPEAT_WINDOW_MS,
+  MAX_AMBUSH_CHUNKS,
+  MAX_BURIALS_IN_WINDOW,
+  MAX_TOPICS_PER_DAY,
+  openAmbush,
+  STALE_TOPIC_MS,
+} from "./ambush";
+export type {
+  Ambush,
+  AmbushOptions,
+  AmbushTopicPlan,
+  ResolvedPlacement,
+  ResolvedTopic,
+} from "./ambush";
+export { buildJudgePrompt, createJudge } from "./judge";
+export type {
+  Judge,
+  JudgeOptions,
+  JudgeRequest,
+  JudgeTarget,
+  JudgeVerdict,
+  UsageJudge,
+  UsageJudgeInput,
+  UsageVerdict,
+} from "./judge";
+export { AMBUSH_HIT_METRIC, recordMetric, TOPIC_RESPONSE_METRIC } from "./metrics";
+export type { MetricInput, MetricName } from "./metrics";
 export { DEFAULT_PFA_PARAMS, pfaMastery } from "./pfa";
 export type { PfaParams } from "./pfa";
 export type { ChunkMastery, Projection, ProjectionMode, SkillMastery } from "./projection";

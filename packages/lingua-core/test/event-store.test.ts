@@ -82,6 +82,40 @@ describe("recordEvidence", () => {
     },
   );
 
+  it("keeps version chains independent across chunks sharing an observation_id", () => {
+    const { db, store } = makeHarness();
+    insertChunk(db, "chunk-a");
+    insertChunk(db, "chunk-b");
+
+    store.recordEvidence({
+      observationId: "shared-obs",
+      chunkId: "chunk-a",
+      assistance: "none",
+      outcome: "correct",
+      confidence: 0.95,
+      quote: "a",
+    });
+    store.recordEvidence({
+      observationId: "shared-obs",
+      chunkId: "chunk-b",
+      assistance: "none",
+      outcome: "not-produced",
+      confidence: 1,
+      quote: "",
+    });
+
+    const events = db
+      .prepare("SELECT chunk_id, event_type, supersedes_event_id FROM events ORDER BY recorded_at, event_id")
+      .all() as unknown as { chunk_id: string; event_type: string; supersedes_event_id: string | null }[];
+
+    // chunk-b 的证据不应把 chunk-a 的版本链顶替换掉。
+    const chunkAEvent = events.find((e) => e.chunk_id === "chunk-a")!;
+    const chunkBEvent = events.find((e) => e.chunk_id === "chunk-b")!;
+    expect(chunkAEvent.event_type).toBe("independent-production");
+    expect(chunkBEvent.event_type).toBe("no-evidence");
+    expect(chunkAEvent.supersedes_event_id).toBeNull();
+  });
+
   it("marks low-confidence evidence as not applied (audit only)", () => {
     const { db, store } = makeHarness();
     insertChunk(db, "chunk-1");

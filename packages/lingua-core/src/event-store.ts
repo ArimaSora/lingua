@@ -92,7 +92,11 @@ export type EventStore = {
   }): LearningEvent;
   // 纠错 = 追加撤销事件（ADR-0014 规则 3），不修改原记录；
   // 撤销以 recorded_at 进入时间线。
-  voidObservation(input: { observationId: string; reason?: string }): LearningEvent;
+  voidObservation(input: {
+    observationId: string;
+    chunkId?: string;
+    reason?: string;
+  }): LearningEvent;
   // as-of 双模式投影查询（ADR-0014 规则 6）：知识地平线必须显式给定。
   // 当时所知：只考虑 recorded_at ≤ 地平线的事件与撤销，按当时参数版本投影。
   // 当前认知：occurred_at ≤ 地平线、排除任何时间被撤销者，按当前参数版本投影。
@@ -198,9 +202,11 @@ export function openEventStore(options: EventStoreOptions): EventStore {
   ensureDefaultSnapshot(db, clock, userId);
 
   const getChunk = db.prepare("SELECT language FROM chunks WHERE id = ?");
+  // 版本链按 (observation_id, chunk_id) 维护：一次用户消息可能同时观测多个语块，
+  // 每个语块的证据独立演进（ADR-0014）。
   const latestVersion = db.prepare(
     `SELECT event_id FROM events
-     WHERE observation_id = ? AND event_type != 'void'
+     WHERE observation_id = ? AND chunk_id = ? AND event_type != 'void'
      ORDER BY recorded_at DESC, event_id DESC LIMIT 1`,
   );
   const insert = db.prepare(
@@ -258,7 +264,7 @@ export function openEventStore(options: EventStoreOptions): EventStore {
     const applied =
       evidence.confidence >= snapshot.params.confidenceThreshold &&
       (derived.fsrsRating !== null || derived.pfaOutcome !== null);
-    const tip = latestVersion.get(evidence.observationId) as
+    const tip = latestVersion.get(evidence.observationId, evidence.chunkId) as
       | { event_id: string }
       | undefined;
 
@@ -305,7 +311,7 @@ export function openEventStore(options: EventStoreOptions): EventStore {
     }
 
     const snapshot = latestSnapshot(db);
-    const tip = latestVersion.get(input.observationId) as
+    const tip = latestVersion.get(input.observationId, input.chunkId) as
       | { event_id: string }
       | undefined;
 
@@ -340,23 +346,30 @@ export function openEventStore(options: EventStoreOptions): EventStore {
     return rowToLearningEvent(row);
   }
 
-  function voidObservation(input: { observationId: string; reason?: string }): LearningEvent {
+  function voidObservation(input: {
+    observationId: string;
+    chunkId?: string;
+    reason?: string;
+  }): LearningEvent {
     // 有效版本 = 全时间线上最新且未被撤销的版本；撤销只指向它，
-    // 之后追加的新版本不受影响。
+    // 之后追加的新版本不受影响。若给定 chunkId，版本链按 (observation_id, chunk_id)
+    // 维护；否则退化为只按 observation_id（单语块观测的向后兼容）。
+    const chunkFilter = input.chunkId !== undefined ? " AND chunk_id = ?" : "";
+    const chainArgs = input.chunkId !== undefined ? [input.observationId, input.chunkId] : [input.observationId];
     const chain = db
       .prepare(
         `SELECT * FROM events
-         WHERE observation_id = ? AND event_type != 'void'
+         WHERE observation_id = ? AND event_type != 'void'${chunkFilter}
          ORDER BY recorded_at DESC, event_id DESC`,
       )
-      .all(input.observationId) as unknown as EventRow[];
+      .all(...chainArgs) as unknown as EventRow[];
     const voided = new Set(
       (
         db
           .prepare(
-            "SELECT voids_event_id FROM events WHERE observation_id = ? AND event_type = 'void'",
+            `SELECT voids_event_id FROM events WHERE observation_id = ? AND event_type = 'void'${chunkFilter}`,
           )
-          .all(input.observationId) as unknown as { voids_event_id: string }[]
+          .all(...chainArgs) as unknown as { voids_event_id: string }[]
       ).map((row) => row.voids_event_id),
     );
     const tip = chain.find((row) => !voided.has(row.event_id));
