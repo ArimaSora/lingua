@@ -290,6 +290,39 @@ try {
     assert.equal(refs[0].layer, 1);
   });
 
+  await check("抽检页：判分记录列表与纠正端点可访问且状态重算（issue #09）", async () => {
+    server!.db.prepare(
+      `INSERT INTO chunks (id, user_id, language, canonical_form, chunk_type, cefr, variants, source_content_id, status, created_at)
+       VALUES (?, 'local', 'en', 'smoke chunk', 'collocation', 'A1', '[]', NULL, 'enrolled', ?)`,
+    ).run("smoke-chunk", Date.now());
+    const obsId = "smoke-obs-1";
+    server!.eventStore.recordEvidence({
+      observationId: obsId,
+      chunkId: "smoke-chunk",
+      assistance: "none",
+      outcome: "correct",
+      confidence: 0.95,
+      quote: "I smoke it",
+      occurredAt: Date.now() - 24 * 60 * 60 * 1000,
+    });
+
+    const records = await getJson(`${api}/api/judgments`);
+    const record = records.find((r: { observationId: string }) => r.observationId === obsId);
+    assert.ok(record, "判分记录列表应包含刚才的判分");
+    assert.equal(record.eventType, "independent-production");
+
+    await postJson(`${api}/api/judgments/${record.eventId}/correct`, {
+      outcome: "wrong",
+      reason: "smoke 测试纠正",
+    });
+
+    const after = await getJson(`${api}/api/judgments`);
+    const corrected = after.find((r: { observationId: string }) => r.observationId === obsId);
+    assert.ok(corrected, "纠正后该观测仍应存在有效版本");
+    assert.equal(corrected.eventType, "independent-attempt-failed");
+    assert.equal(corrected.chain.length, 2, "依据链应包含原记录与替代版本");
+  });
+
   await check("持久化跨重启：重开服务后消息仍在", async () => {
     const first = server!;
     await first.close();

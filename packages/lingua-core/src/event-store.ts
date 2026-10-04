@@ -70,6 +70,45 @@ export type LinguaParams = {
   pfa: PfaParams;
 };
 
+export type JudgmentChainItem = {
+  eventId: string;
+  eventType: EventType;
+  recordedAt: number;
+  supersedesEventId: string | null;
+  voidsEventId: string | null;
+  voidReason: string | null;
+};
+
+export type JudgmentRecord = {
+  eventId: string;
+  observationId: string;
+  chunkId: string;
+  chunkForm: string;
+  language: string;
+  eventType: EventType;
+  outcome: Outcome | null;
+  assistance: Assistance | null;
+  confidence: number | null;
+  quote: string | null;
+  occurredAt: number;
+  recordedAt: number;
+  topicId: string | null;
+  judgeName: string | null;
+  judgeVersion: string | null;
+  applied: boolean;
+  chain: JudgmentChainItem[];
+};
+
+export type CorrectObservationInput = {
+  observationId: string;
+  chunkId: string;
+  outcome: "correct" | "wrong" | "not-produced";
+  assistance?: Assistance;
+  confidence?: number;
+  quote?: string;
+  reason?: string;
+};
+
 export function defaultParams(): LinguaParams {
   return {
     confidenceThreshold: 0.7,
@@ -97,6 +136,18 @@ export type EventStore = {
     chunkId?: string;
     reason?: string;
   }): LearningEvent;
+  // 「角色眼中的你」抽检页：判分记录列表与单条查询。
+  listJudgments(input?: {
+    language?: string;
+    chunkId?: string;
+    observationId?: string;
+  }): JudgmentRecord[];
+  getJudgment(eventId: string): JudgmentRecord | undefined;
+  // 用户纠错：追加撤销 + 替代事件，状态自动重算（复用票 01 管线）。
+  correctObservation(input: CorrectObservationInput): {
+    voidEvent: LearningEvent;
+    newEvent: LearningEvent;
+  };
   // as-of 双模式投影查询（ADR-0014 规则 6）：知识地平线必须显式给定。
   // 当时所知：只考虑 recorded_at ≤ 地平线的事件与撤销，按当时参数版本投影。
   // 当前认知：occurred_at ≤ 地平线、排除任何时间被撤销者，按当前参数版本投影。
@@ -408,10 +459,170 @@ export function openEventStore(options: EventStoreOptions): EventStore {
     return rowToLearningEvent(row);
   }
 
+  function placeholders(count: number): string {
+    return Array.from({ length: count }, () => "?").join(",");
+  }
+
+  const getChunkForm = db.prepare(
+    "SELECT canonical_form FROM chunks WHERE id = ? AND user_id = ?",
+  );
+
+  function eventRowToJudgmentRecord(row: EventRow & { chunk_form?: string }): JudgmentRecord {
+    const event = rowToLearningEvent(row);
+    return {
+      eventId: event.eventId,
+      observationId: event.observationId,
+      chunkId: event.chunkId!,
+      chunkForm: row.chunk_form ?? "",
+      language: event.language,
+      eventType: event.eventType,
+      outcome: event.outcome,
+      assistance: event.assistance,
+      confidence: event.confidence,
+      quote: event.quote,
+      occurredAt: event.occurredAt,
+      recordedAt: event.recordedAt,
+      topicId: event.topicId,
+      judgeName: event.judgeName,
+      judgeVersion: event.judgeVersion,
+      applied: event.applied,
+      chain: [],
+    };
+  }
+
+  function buildChains(records: JudgmentRecord[]): void {
+    if (records.length === 0) return;
+    const observationIds = [...new Set(records.map((r) => r.observationId))];
+    const chunkIds = [...new Set(records.map((r) => r.chunkId))];
+    const rows = db
+      .prepare(
+        `SELECT * FROM events
+         WHERE user_id = ? AND observation_id IN (${placeholders(observationIds.length)})
+           AND chunk_id IN (${placeholders(chunkIds.length)})
+         ORDER BY recorded_at DESC, event_id DESC`,
+      )
+      .all(userId, ...observationIds, ...chunkIds) as unknown as EventRow[];
+
+    const byKey = new Map<string, JudgmentChainItem[]>();
+    for (const row of rows) {
+      const key = `${row.observation_id}:${row.chunk_id ?? ""}`;
+      const item: JudgmentChainItem = {
+        eventId: row.event_id,
+        eventType: row.event_type,
+        recordedAt: row.recorded_at,
+        supersedesEventId: row.supersedes_event_id,
+        voidsEventId: row.voids_event_id,
+        voidReason: row.void_reason,
+      };
+      byKey.set(key, [...(byKey.get(key) ?? []), item]);
+    }
+    for (const record of records) {
+      record.chain = byKey.get(`${record.observationId}:${record.chunkId}`) ?? [];
+    }
+  }
+
+  function listJudgments(input: {
+    language?: string;
+    chunkId?: string;
+    observationId?: string;
+  } = {}): JudgmentRecord[] {
+    const conditions = ["e.user_id = ?", "e.event_type NOT IN ('void', 'initial-learning')"];
+    const args: (string | number)[] = [userId];
+    if (input.language !== undefined) {
+      conditions.push("e.language = ?");
+      args.push(input.language);
+    }
+    if (input.chunkId !== undefined) {
+      conditions.push("e.chunk_id = ?");
+      args.push(input.chunkId);
+    }
+    if (input.observationId !== undefined) {
+      conditions.push("e.observation_id = ?");
+      args.push(input.observationId);
+    }
+
+    const rows = db
+      .prepare(
+        `SELECT e.*, c.canonical_form AS chunk_form
+         FROM events e
+         JOIN chunks c ON c.id = e.chunk_id AND c.user_id = e.user_id
+         WHERE ${conditions.join(" AND ")}
+         ORDER BY e.recorded_at DESC, e.event_id DESC`,
+      )
+      .all(...args) as unknown as (EventRow & { chunk_form: string })[];
+
+    const records = rows.map(eventRowToJudgmentRecord);
+    buildChains(records);
+    return records;
+  }
+
+  function getJudgment(eventId: string): JudgmentRecord | undefined {
+    const row = db
+      .prepare(
+        `SELECT e.*, c.canonical_form AS chunk_form
+         FROM events e
+         JOIN chunks c ON c.id = e.chunk_id AND c.user_id = e.user_id
+         WHERE e.event_id = ? AND e.user_id = ?`,
+      )
+      .get(eventId, userId) as (EventRow & { chunk_form: string }) | undefined;
+    if (!row) return undefined;
+    const record = eventRowToJudgmentRecord(row);
+    buildChains([record]);
+    return record;
+  }
+
+  function correctObservation(input: CorrectObservationInput): {
+    voidEvent: LearningEvent;
+    newEvent: LearningEvent;
+  } {
+    const tip = latestVersion.get(input.observationId, input.chunkId) as
+      | { event_id: string }
+      | undefined;
+    if (!tip) {
+      throw new Error(`no effective version for observation: ${input.observationId}`);
+    }
+    const tipRow = db
+      .prepare(
+        "SELECT * FROM events WHERE event_id = ? AND user_id = ?",
+      )
+      .get(tip.event_id, userId) as EventRow | undefined;
+    if (!tipRow) {
+      throw new Error(`no effective version for observation: ${input.observationId}`);
+    }
+
+    const voidEvent = voidObservation({
+      observationId: input.observationId,
+      chunkId: input.chunkId,
+      ...(input.reason ? { reason: input.reason } : {}),
+    });
+
+    const commonEvidence = {
+      observationId: input.observationId,
+      chunkId: input.chunkId,
+      confidence: input.confidence ?? 1,
+      quote: input.quote ?? tipRow.quote ?? "",
+      occurredAt: tipRow.occurred_at,
+      ...(tipRow.topic_id ? { topicId: tipRow.topic_id } : {}),
+      judge: { name: "human-review", version: "1" },
+    };
+
+    const evidence: Evidence =
+      input.outcome === "not-produced"
+        ? { ...commonEvidence, outcome: "not-produced" }
+        : { ...commonEvidence, outcome: input.outcome, assistance: input.assistance ?? "none" };
+
+    const newEvent = recordEvidence(evidence);
+
+    return { voidEvent, newEvent };
+  }
+
   return {
     recordEvidence,
     recordInitialLearning,
     voidObservation,
+    listJudgments,
+    getJudgment,
+    correctObservation,
     asKnownAt: (horizon: number) => projectState(db, "as-known", horizon),
     currentBeliefAt: (horizon: number) => projectState(db, "current-belief", horizon),
   };

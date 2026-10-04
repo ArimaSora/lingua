@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>角色眼中的你 · 抽检</title>
+<style>
+  :root {
+    --bg: #f3f4f6;
+    --card: #ffffff;
+    --border: #e5e7eb;
+    --muted: #6b7280;
+    --accent: #2563eb;
+    --danger: #dc2626;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    padding: 20px;
+  }
+  h1 { font-size: 18px; margin: 0 0 16px; }
+  .back { font-size: 14px; color: var(--muted); text-decoration: none; }
+  .back:hover { color: var(--accent); }
+  #status { font-size: 13px; color: var(--muted); min-height: 20px; margin-bottom: 12px; }
+  .record {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px;
+    margin-bottom: 12px;
+  }
+  .record header {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+  }
+  .meta { font-size: 13px; color: var(--muted); }
+  .quote { font-style: italic; margin: 8px 0; color: #111827; }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  .actions button {
+    border: 1px solid var(--border);
+    background: #fff;
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .actions button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .actions button.danger { color: var(--danger); border-color: var(--danger); }
+  details { margin-top: 10px; font-size: 13px; color: var(--muted); }
+  summary { cursor: pointer; }
+  .chain { padding-left: 14px; }
+  .chain li { margin: 4px 0; }
+  .empty { color: var(--muted); font-size: 14px; }
+</style>
+</head>
+<body>
+  <a class="back" href="/">← 返回聊天</a>
+  <h1>角色眼中的你 · 判分抽检</h1>
+  <div id="status">加载中…</div>
+  <div id="records"></div>
+<script>
+  const statusEl = document.getElementById("status");
+  const recordsEl = document.getElementById("records");
+
+  async function api(path, options) {
+    const res = await fetch(path, options);
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error || `请求失败（${res.status}）`);
+    }
+    return res.json();
+  }
+
+  function formatTime(ts) {
+    return new Date(ts).toLocaleString("zh-CN");
+  }
+
+  function renderChain(chain) {
+    if (chain.length === 0) return "";
+    const items = chain.map((item) => {
+      const note = item.voidsEventId ? `（撤销 ${item.voidsEventId.slice(0, 8)}…）` : "";
+      return `<li>${item.eventType} @ ${formatTime(item.recordedAt)}${note}</li>`;
+    }).join("");
+    return `<details><summary>依据链（${chain.length} 个版本）</summary><ul class="chain">${items}</ul></details>`;
+  }
+
+  function renderRecords(records) {
+    recordsEl.replaceChildren();
+    if (records.length === 0) {
+      recordsEl.innerHTML = `<p class="empty">暂无判分记录。</p>`;
+      return;
+    }
+    for (const record of records) {
+      const el = document.createElement("div");
+      el.className = "record";
+      el.innerHTML = `
+        <header>
+          <strong>${record.chunkForm}</strong>
+          <span class="meta">${record.eventType} · 置信度 ${record.confidence ?? "-"} · ${record.applied ? "已采纳" : "未采纳"}</span>
+        </header>
+        <div class="meta">语块：${record.chunkId} · 观测：${record.observationId.slice(0, 8)}…</div>
+        <div class="quote">“${record.quote ?? ""}”</div>
+        <div class="meta">判定：${record.outcome ?? "-"} · 辅助：${record.assistance ?? "-"} · ${record.judgeName ?? "unknown"}@${record.judgeVersion ?? "-"}</div>
+        ${renderChain(record.chain)}
+        <div class="actions">
+          <span class="meta">纠正为：</span>
+          <button data-action="correct" data-event="${record.eventId}" data-outcome="correct">✓ 正确</button>
+          <button class="danger" data-action="correct" data-event="${record.eventId}" data-outcome="wrong">✗ 错误</button>
+          <button data-action="correct" data-event="${record.eventId}" data-outcome="not-produced">未产出</button>
+        </div>
+      `;
+      recordsEl.appendChild(el);
+    }
+  }
+
+  async function load() {
+    try {
+      const records = await api("/api/judgments");
+      statusEl.textContent = `共 ${records.length} 条判分记录`;
+      renderRecords(records);
+    } catch (error) {
+      statusEl.textContent = error.message;
+    }
+  }
+
+  recordsEl.addEventListener("click", async (event) => {
+    const button = event.target.closest("button[data-action='correct']");
+    if (!button) return;
+    const eventId = button.dataset.event;
+    const outcome = button.dataset.outcome;
+    button.disabled = true;
+    statusEl.textContent = "提交纠错…";
+    try {
+      await api(`/api/judgments/${eventId}/correct`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ outcome, reason: "用户抽检纠正" }),
+      });
+      statusEl.textContent = "纠错已生效，状态自动重算。";
+      await load();
+    } catch (error) {
+      statusEl.textContent = error.message;
+      button.disabled = false;
+    }
+  });
+
+  load();
+</script>
+</body>
+</html>
