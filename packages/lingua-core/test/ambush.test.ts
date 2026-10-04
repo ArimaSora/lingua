@@ -382,4 +382,49 @@ describe("埋伏闭环：Judge + 事件 + 状态（issue #7 验收）", () => {
       .all(AMBUSH_HIT_METRIC, "c1") as unknown as { value: number }[];
     expect(hits.map((r) => r.value)).toEqual([0]);
   });
+
+  it("近期示范过目标语块时判对 = 辅助产出，命中记 0（ADR-0013 独立产出口径）", async () => {
+    const harness = makeHarness();
+    const { db, clock, store } = harness;
+    makeDue(harness, ["c1", "c2"], { forms: { c1: "look for", c2: "see you around" } });
+
+    clock.set(T0 + 2 * DAY);
+    const ambush = openAmbush({ db, clock });
+    const plan = ambush.planAmbushTopic("en")!;
+    expect(plan.chunkIds).toContain("c1");
+
+    // 用户用上了目标语块且判对，但近几轮角色示范过该形式（有辅助）。
+    const judge = createJudge({
+      db,
+      usageJudge: fakeUsageJudge({ outcome: "correct", confidence: 0.95 }),
+    });
+    const resolved = await ambush.resolveTopic({
+      topicId: plan.topicId,
+      userText: "I am looking for a new podcast lately.",
+      judge,
+      store,
+      exposedRecently: true,
+    });
+
+    const placement = resolved.placements.find((p) => p.chunkId === "c1")!;
+    expect(placement.outcome).toBe("missed");
+
+    // 命中率口径（ADR-0013）：辅助产出不是独立产出，只进分母（埋伏次数）。
+    const hits = db
+      .prepare(
+        "SELECT value FROM metric_events WHERE metric_name = ? AND json_extract(payload, '$.chunkId') = ?",
+      )
+      .all(AMBUSH_HIT_METRIC, "c1") as unknown as { value: number }[];
+    expect(hits.map((r) => r.value)).toEqual([0]);
+
+    // 事件流同步为辅助产出：FSRS/PFA 均不更新（ADR-0013 矩阵）。
+    const assisted = db
+      .prepare(
+        "SELECT event_type, outcome, assistance FROM events WHERE chunk_id = ? AND event_type != 'initial-learning'",
+      )
+      .all("c1") as unknown as { event_type: string; outcome: string; assistance: string | null }[];
+    expect(assisted).toEqual([
+      { event_type: "assisted-production", outcome: "correct", assistance: "assisted" },
+    ]);
+  });
 });
