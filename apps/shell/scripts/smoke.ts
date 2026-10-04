@@ -296,6 +296,13 @@ try {
   });
 
   await check("抽检页：判分记录列表与纠正端点可访问且状态重算（issue #09）", async () => {
+    // 页面全链路：入口链接 → 抽检页可服务 → API 列表 → 纠错 → 链条与有效版本。
+    const indexHtml = await fetch(`${api}/`).then((r) => r.text());
+    assert.match(indexHtml, /href="\/review\.html"/, "聊天页应挂抽检页入口");
+    const reviewHtml = await fetch(`${api}/review.html`).then((r) => r.text());
+    assert.match(reviewHtml, /判分抽检/);
+    assert.match(reviewHtml, /置信度/, "列表应渲染置信度列");
+    assert.match(reviewHtml, /correct/, "列表应提供纠正操作");
     server!.db.prepare(
       `INSERT INTO chunks (id, user_id, language, canonical_form, chunk_type, cefr, variants, source_content_id, status, created_at)
        VALUES (?, 'local', 'en', 'smoke chunk', 'collocation', 'A1', '[]', NULL, 'enrolled', ?)`,
