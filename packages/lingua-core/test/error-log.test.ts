@@ -10,6 +10,36 @@ import { insertChunk, makeHarness, T0 } from "./helpers";
 // 与学习者状态、关系记忆、prompt 注入之间无直接写入路径。
 
 describe("recordErrorLog", () => {
+  it("does not touch learner state: projection and events are unchanged (issue #8)", () => {
+    const { db, clock, store } = makeHarness();
+    insertChunk(db, "chunk-1", { form: "look ___ up" });
+    store.recordInitialLearning({ observationId: "obs-1", chunkId: "chunk-1" });
+
+    const before = store.currentBeliefAt(clock.now());
+    const beforeEventCount = (
+      db.prepare("SELECT COUNT(*) AS n FROM events").get() as { n: number }
+    ).n;
+
+    recordErrorLog({
+      db,
+      clock,
+      language: "en",
+      topicId: "topic-1",
+      chunkId: "chunk-1",
+      originalText: "I look up it.",
+      quote: "look up it",
+      phenomenon: "这个表达里有个地方不太对，能发现吗？",
+      correction: "正确说法：look it up。",
+    });
+
+    const after = store.currentBeliefAt(clock.now());
+    expect(after).toEqual(before);
+    const afterEventCount = (
+      db.prepare("SELECT COUNT(*) AS n FROM events").get() as { n: number }
+    ).n;
+    expect(afterEventCount).toBe(beforeEventCount);
+  });
+
   it("writes a syntax error with phenomenon and correction", () => {
     const { db, clock } = makeHarness();
     insertChunk(db, "chunk-1", { form: "look ___ up" });

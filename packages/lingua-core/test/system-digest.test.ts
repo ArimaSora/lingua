@@ -57,12 +57,12 @@ describe("renderPendingSystemDigests", () => {
     const digests = renderPendingSystemDigests({ db, clock, language: "en" });
 
     expect(digests).toHaveLength(1);
-    expect(digests[0].topicId).toBe(plan.topicId);
-    expect(digests[0].text).toContain("判分回顾");
-    expect(digests[0].text).toContain(CORRECTION_OPEN);
-    expect(digests[0].text).toContain(CORRECTION_CLOSE);
-    expect(digests[0].text).toContain("明日到期");
-    expect(digests[0].errorCount).toBeGreaterThan(0);
+    expect(digests[0]!.topicId).toBe(plan.topicId);
+    expect(digests[0]!.text).toContain("判分回顾");
+    expect(digests[0]!.text).toContain(CORRECTION_OPEN);
+    expect(digests[0]!.text).toContain(CORRECTION_CLOSE);
+    expect(digests[0]!.text).toContain("明日到期");
+    expect(digests[0]!.errorCount).toBeGreaterThan(0);
   });
 
   it("renders a digest when an open topic has been idle for 30 minutes", async () => {
@@ -83,8 +83,8 @@ describe("renderPendingSystemDigests", () => {
     const digests = renderPendingSystemDigests({ db, clock, language: "en" });
 
     expect(digests).toHaveLength(1);
-    expect(digests[0].topicId).toBe(plan.topicId);
-    expect(digests[0].text).toContain("话题已结束");
+    expect(digests[0]!.topicId).toBe(plan.topicId);
+    expect(digests[0]!.text).toContain("话题已结束");
   });
 
   it("renders a digest immediately when error count reaches threshold", async () => {
@@ -117,8 +117,8 @@ describe("renderPendingSystemDigests", () => {
     const digests = renderPendingSystemDigests({ db, clock, language: "en" });
 
     expect(digests).toHaveLength(1);
-    expect(digests[0].errorCount).toBe(ERROR_DIGEST_THRESHOLD);
-    expect(digests[0].text).toContain(`错误累计已达 ${ERROR_DIGEST_THRESHOLD} 条，提前发送小结。`);
+    expect(digests[0]!.errorCount).toBe(ERROR_DIGEST_THRESHOLD);
+    expect(digests[0]!.text).toContain(`错误累计已达 ${ERROR_DIGEST_THRESHOLD} 条，提前发送小结。`);
   });
 
   it("does not render a digest twice for the same topic", async () => {

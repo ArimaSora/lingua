@@ -10,6 +10,7 @@ import {
   getPendingSuggestion,
   loadCharacterCard,
   loadKnowledgeEntries,
+  markTopicDigestSent,
   migrate,
   openBootstrap,
   openContentPipeline,
@@ -23,6 +24,7 @@ import {
   parseBootstrapPack,
   parseRssFeed,
   proposeScaffoldingTier,
+  renderPendingSystemDigests,
   runBackup,
   SystemClock,
   type CharacterCard,
@@ -236,6 +238,19 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
         id: "bootstrap-push",
         intervalMs: 0,
         run: () => void bootstrap.pushNextLesson(language),
+      },
+      {
+        // 系统小结投递（issue #8，ADR-0009）：话题结束（30 分钟无活动）或错误
+        // 累计 ≥3 条时，把小结推进系统会话——只在系统自己的会话里，不打断角色
+        // 对话；digest_sent_at 幂等标记，重复 tick 不重复投递。
+        id: "system-digest",
+        intervalMs: 0,
+        run: () => {
+          for (const digest of renderPendingSystemDigests({ db, clock, language })) {
+            store.append({ language, contact: "system", role: "assistant", text: digest.text });
+            markTopicDigestSent(db, digest.topicId, clock.now());
+          }
+        },
       },
       {
         id: "rss-poll",

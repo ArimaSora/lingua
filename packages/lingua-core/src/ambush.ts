@@ -377,7 +377,7 @@ export function openAmbush(options: AmbushOptions): Ambush {
           quote: verdict.quote,
           errorType: "usage",
           phenomenon: `你用了 "${verdict.quote}"，这个表达里有个地方不太对，能发现吗？`,
-          correction: `正确说法：${canonicalForm}。`,
+          correction: `参考答案：${canonicalForm}。`,
         });
       }
 

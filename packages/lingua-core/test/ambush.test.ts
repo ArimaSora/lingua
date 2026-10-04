@@ -420,10 +420,10 @@ describe("埋伏闭环：Judge + 事件 + 状态（issue #7 验收）", () => {
       correction: string;
     }[];
     expect(errors).toHaveLength(1);
-    expect(errors[0].chunk_id).toBe("c1");
-    expect(errors[0].quote).toBe("look for");
-    expect(errors[0].phenomenon).toBeTruthy();
-    expect(errors[0].correction).toContain("look for");
+    expect(errors[0]!.chunk_id).toBe("c1");
+    expect(errors[0]!.quote).toBe("look for");
+    expect(errors[0]!.phenomenon).toBeTruthy();
+    expect(errors[0]!.correction).toContain("look for");
 
     // 错误用法仍按 ADR-0013 更新学习者状态（again / failure），
     // 但错误日志表本身不直接写入状态——状态只由 events 管线决定。
