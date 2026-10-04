@@ -60,8 +60,18 @@ export type ContentPipelineOptions = {
   maxA1SentenceLength?: number;
 };
 
+export type IngestProvidedInput = {
+  title?: string | undefined;
+  body: string;
+  sourceUrl: string;
+  publishedAt?: number | undefined;
+  feedId?: string | undefined;
+  audioUrl?: string | undefined;
+};
+
 export type ContentPipeline = {
   ingest(input: { url: string }): Promise<IngestResult>;
+  ingestProvided(input: IngestProvidedInput): Promise<IngestResult>;
   listUnlockQueue(): UnlockQueueItem[];
   expireUnlockQueue(now?: number): string[];
 };
@@ -106,8 +116,8 @@ export function openContentPipeline(options: ContentPipelineOptions): ContentPip
     `INSERT INTO content_items (
        id, user_id, language, feed_id, source_url, title, body,
        difficulty_score, cefr_estimate, perishability, unlock_level,
-       status, pipeline_status, expires_at, simplified_source_id, created_at
-     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       status, pipeline_status, expires_at, simplified_source_id, audio_url, created_at
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
 
   function createContentRow(params: {
@@ -122,12 +132,14 @@ export function openContentPipeline(options: ContentPipelineOptions): ContentPip
     pipelineStatus: "inbox" | "unlock_queued" | "simplified" | "dismissed";
     expiresAt: number | null;
     simplifiedSourceId: string | null;
+    feedId?: string | null;
+    audioUrl?: string | null;
   }): void {
     insertContent.run(
       params.id,
       userId,
       language,
-      null,
+      params.feedId ?? null,
       params.sourceUrl,
       params.title,
       params.body,
@@ -139,16 +151,16 @@ export function openContentPipeline(options: ContentPipelineOptions): ContentPip
       params.pipelineStatus,
       params.expiresAt,
       params.simplifiedSourceId,
+      params.audioUrl ?? null,
       clock.now(),
     );
   }
 
-  async function ingest(input: { url: string }): Promise<IngestResult> {
-    const extracted = await extractor(input.url);
+  async function ingestProvided(input: IngestProvidedInput): Promise<IngestResult> {
     const difficultyInput: DifficultyInput = {
-      text: extracted.body,
-      url: input.url,
-      publishedAt: extracted.publishedAt,
+      text: input.body,
+      url: input.sourceUrl,
+      publishedAt: input.publishedAt,
     };
     const assessment = await difficulty.assess(difficultyInput);
     const { level, coverage, perishability } = assessment;
@@ -158,9 +170,9 @@ export function openContentPipeline(options: ContentPipelineOptions): ContentPip
       kind: "direct",
       original: {
         id: originalId,
-        title: extracted.title ?? null,
-        body: extracted.body,
-        sourceUrl: input.url,
+        title: input.title ?? null,
+        body: input.body,
+        sourceUrl: input.sourceUrl,
       },
       level,
       coverage,
@@ -170,9 +182,9 @@ export function openContentPipeline(options: ContentPipelineOptions): ContentPip
     if (!isHard(level, hardThreshold)) {
       createContentRow({
         id: originalId,
-        sourceUrl: input.url,
-        title: extracted.title ?? null,
-        body: extracted.body,
+        sourceUrl: input.sourceUrl,
+        title: input.title ?? null,
+        body: input.body,
         difficultyScore: coverage,
         cefrEstimate: level,
         perishability,
@@ -180,6 +192,8 @@ export function openContentPipeline(options: ContentPipelineOptions): ContentPip
         pipelineStatus: "inbox",
         expiresAt: null,
         simplifiedSourceId: null,
+        feedId: input.feedId ?? null,
+        audioUrl: input.audioUrl ?? null,
       });
       return baseResult;
     }
@@ -187,17 +201,17 @@ export function openContentPipeline(options: ContentPipelineOptions): ContentPip
     if (perishability === "perishable") {
       try {
         const simplified = await simplifier({
-          title: extracted.title,
-          body: extracted.body,
-          url: input.url,
+          title: input.title,
+          body: input.body,
+          url: input.sourceUrl,
           targetLevel: simplifyTargetLevel,
         });
         const simplifiedId = clock.newId();
         createContentRow({
           id: originalId,
-          sourceUrl: input.url,
-          title: extracted.title ?? null,
-          body: extracted.body,
+          sourceUrl: input.sourceUrl,
+          title: input.title ?? null,
+          body: input.body,
           difficultyScore: coverage,
           cefrEstimate: level,
           perishability,
@@ -205,10 +219,12 @@ export function openContentPipeline(options: ContentPipelineOptions): ContentPip
           pipelineStatus: "dismissed",
           expiresAt: null,
           simplifiedSourceId: null,
+          feedId: input.feedId ?? null,
+          audioUrl: input.audioUrl ?? null,
         });
         createContentRow({
           id: simplifiedId,
-          sourceUrl: input.url,
+          sourceUrl: input.sourceUrl,
           title: simplified.title,
           body: simplified.body,
           difficultyScore: 1,
@@ -218,6 +234,7 @@ export function openContentPipeline(options: ContentPipelineOptions): ContentPip
           pipelineStatus: "simplified",
           expiresAt: null,
           simplifiedSourceId: originalId,
+          feedId: input.feedId ?? null,
         });
         return {
           ...baseResult,
@@ -236,9 +253,9 @@ export function openContentPipeline(options: ContentPipelineOptions): ContentPip
     const expiresAt = perishability === "perishable" ? clock.now() + perishableQueueTtlMs : null;
     createContentRow({
       id: originalId,
-      sourceUrl: input.url,
-      title: extracted.title ?? null,
-      body: extracted.body,
+      sourceUrl: input.sourceUrl,
+      title: input.title ?? null,
+      body: input.body,
       difficultyScore: coverage,
       cefrEstimate: level,
       perishability,
@@ -246,6 +263,8 @@ export function openContentPipeline(options: ContentPipelineOptions): ContentPip
       pipelineStatus: "unlock_queued",
       expiresAt,
       simplifiedSourceId: null,
+      feedId: input.feedId ?? null,
+      audioUrl: input.audioUrl ?? null,
     });
     unlockQueue.add(originalId, { unlockLevel: level, expiresAt });
 
@@ -256,8 +275,19 @@ export function openContentPipeline(options: ContentPipelineOptions): ContentPip
     };
   }
 
+  async function ingest(input: { url: string }): Promise<IngestResult> {
+    const extracted = await extractor(input.url);
+    return ingestProvided({
+      title: extracted.title,
+      body: extracted.body,
+      sourceUrl: input.url,
+      publishedAt: extracted.publishedAt,
+    });
+  }
+
   return {
     ingest,
+    ingestProvided,
     listUnlockQueue: () => unlockQueue.list(),
     expireUnlockQueue: (now?: number) => unlockQueue.expireOld(now),
   };

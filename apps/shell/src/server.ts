@@ -6,6 +6,9 @@ import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import type { LanguageModel } from "ai";
 import {
   APP_OPEN_METRIC,
+  ensureLearnerProfile,
+  formatScaffoldingSuggestion,
+  getPendingSuggestion,
   loadCharacterCard,
   loadKnowledgeEntries,
   migrate,
@@ -16,8 +19,11 @@ import {
   openExplanationLog,
   openKnowledgeStore,
   openMessageStore,
+  openRssSubscriptions,
   openScheduler,
   parseBootstrapPack,
+  parseRssFeed,
+  proposeScaffoldingTier,
   queryMetricsPanel,
   recordMetric,
   runBackup,
@@ -29,6 +35,8 @@ import {
   type CoarseGrader,
   type Database,
   type PerishabilityTagger,
+  type RssFetcher,
+  type RssSubscriptions,
   type Scheduler,
   type Wordlist,
 } from "@lingua/core";
@@ -65,6 +73,8 @@ export type StartServerOptions = {
   wordlist?: Wordlist;
   grader?: CoarseGrader | null;
   tagger?: PerishabilityTagger | null;
+  // RSS 抓取器可注入；无注入时使用真实 fetch（e2e 必须传入假抓取器避免真实网络）。
+  rssFetcher?: RssFetcher;
 };
 
 export type RunningServer = {
@@ -89,6 +99,18 @@ const BACKUP_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const BACKUP_KEEP_LAST = 7;
 // 解锁队列过期清理：每日一次（issue #10）。
 const UNLOCK_QUEUE_EXPIRE_INTERVAL_MS = 24 * 60 * 60 * 1000;
+// RSS 轮询：每 15 分钟一次（issue #11）。
+const RSS_POLL_INTERVAL_MS = 15 * 60 * 1000;
+
+function createDefaultRssFetcher(): RssFetcher {
+  return async (url: string) => {
+    const response = await fetch(url, { redirect: "follow" });
+    if (!response.ok) {
+      throw new Error(`RSS 抓取失败：${response.status} ${response.statusText}`);
+    }
+    return response.text();
+  };
+}
 
 function readCard(cardPath: string | undefined, dir: string): unknown {
   const candidates = cardPath ? [resolveHome(cardPath)] : [join(dir, "companion.json")];
@@ -145,6 +167,8 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
   // 角色卡：数据目录 companion.json > 显式路径 > 内置默认卡；幂等加载。
   const card = loadCharacterCard({ db, clock, card: readCard(options.cardPath, dir) });
   const language = card.languagePair.target;
+  // 学习者档案初始化（issue #13）：以角色卡档位为默认值，不覆盖既有手动设置。
+  ensureLearnerProfile({ db, clock, language, cardTier: card.scaffoldingTier });
 
   // 主动打开留存（issue #14）：壳层启动时记录 app-open 事件。
   recordMetric({
@@ -189,6 +213,16 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
     tagger: options.tagger,
   });
 
+  const rss: RssSubscriptions = openRssSubscriptions({
+    db,
+    clock,
+    language,
+    pipeline,
+    messageStore: store,
+    fetcher: options.rssFetcher ?? createDefaultRssFetcher(),
+    parser: parseRssFeed,
+  });
+
   const model = options.model ?? buildModel(options.configPath);
   // 知识条目库（issue #12）：随包种子内容，启动时加载并全量校验。
   const knowledge = openKnowledgeStore({ entries: loadKnowledgeEntries() });
@@ -205,7 +239,8 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
   const bootstrap = openBootstrap({ db, clock });
   bootstrap.seedPack(pack);
 
-  // 唯一调度器：课包推送（每 tick 检查，完成预学才推下一课）+ 定时备份 + 解锁队列过期清理。
+  // 唯一调度器：课包推送（每 tick 检查，完成预学才推下一课）+ 定时备份 +
+  // 解锁队列过期清理 + RSS 轮询（issue #11）。
   // 票 04 的额度入账是查询时惰性结算，调度器不重复实现其 tick（ADR-0016）。
   const scheduler = openScheduler({
     db,
@@ -215,6 +250,13 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
         id: "bootstrap-push",
         intervalMs: 0,
         run: () => void bootstrap.pushNextLesson(language),
+      },
+      {
+        id: "rss-poll",
+        intervalMs: RSS_POLL_INTERVAL_MS,
+        run: (now: number) => {
+          void rss.poll(now);
+        },
       },
       {
         id: "backup",
@@ -301,18 +343,21 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
           }
           if (body.contact === "system") {
             store.append({ language, contact: "system", role: "user", text: body.text.trim() });
-            let replyText: string;
+            let systemResult: ReturnType<typeof handleSystemMessage>;
             try {
-              replyText = handleSystemMessage({
+              systemResult = handleSystemMessage({
                 text: body.text.trim(),
+                db,
+                clock,
                 bootstrap,
                 pipeline,
                 language,
+                rss,
               });
             } catch (error) {
               if (error instanceof SystemUrlIntentError) {
                 const result = await pipeline.ingest({ url: error.url });
-                replyText = formatIngestReply(result);
+                systemResult = { reply: formatIngestReply(result), skipSuggestion: false };
               } else {
                 throw error;
               }
@@ -321,8 +366,20 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
               language,
               contact: "system",
               role: "assistant",
-              text: replyText,
+              text: systemResult.reply,
             });
+            // 系统依据事件流提出建议，以消息形式出现；未经确认不改变行为。
+            if (!systemResult.skipSuggestion && !getPendingSuggestion({ db, language })) {
+              const suggestion = proposeScaffoldingTier({ db, clock, language });
+              if (suggestion) {
+                store.append({
+                  language,
+                  contact: "system",
+                  role: "assistant",
+                  text: formatScaffoldingSuggestion(suggestion),
+                });
+              }
+            }
             json(res, 200, reply);
             return;
           }

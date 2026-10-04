@@ -148,4 +148,35 @@ describe("内容管道：链接 → 抓取 → 难度评估 → 分流", () => {
     expect(removed.length).toBe(1);
     expect(pipeline.listUnlockQueue()).toHaveLength(0);
   });
+
+  it("可接收已提取文本，携带 feed_id 与 audio_url 入库并仍走难度管道", async () => {
+    const { db, clock } = setup();
+    const pipeline = openContentPipeline({
+      db,
+      clock,
+      language: "en",
+      extractor: async () => ({ title: "never", body: "never" }),
+      simplifier: createSimplifier(),
+      wordlist: fakeWordlist(),
+    });
+
+    const result = await pipeline.ingestProvided({
+      title: "Podcast with transcript",
+      body: "The cat is big. I like the cat.",
+      sourceUrl: "https://podcast.example.com/ep1",
+      feedId: "feed-1",
+      audioUrl: "https://cdn.example.com/ep1.mp3",
+    });
+
+    expect(result.level).toBe("A1");
+    expect(result.kind).toBe("direct");
+    expect(result.original.title).toBe("Podcast with transcript");
+    expect(result.original.sourceUrl).toBe("https://podcast.example.com/ep1");
+
+    const row = db
+      .prepare("SELECT feed_id, audio_url FROM content_items WHERE id = ?")
+      .get(result.original.id) as { feed_id: string | null; audio_url: string | null };
+    expect(row.feed_id).toBe("feed-1");
+    expect(row.audio_url).toBe("https://cdn.example.com/ep1.mp3");
+  });
 });

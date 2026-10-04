@@ -80,7 +80,7 @@ const fakeModel = new MockLanguageModelV4({
     }
     if (callCount === 5) {
       const text =
-        "good question! English verbs always carry time info — “see” has to become “saw” for yesterday. 【mindset-tense-marking】";
+        'good question! English verbs always carry time info — "see" has to become "saw" for yesterday. [[register:formal]]is required to[[register:neutral]] change. 【mindset-tense-marking】';
       return {
         content: [{ type: "text", text: `${text}\n${TRANSLATION_MARKER}\n问得好！英语动词必须带时间信息，昨天就得用 saw。【mindset-tense-marking】` }],
         finishReason: { unified: "stop" as const, raw: undefined },
@@ -133,6 +133,7 @@ try {
     model: fakeModel,
     extractor: fakeExtractor,
     simplifier: fakeSimplifier,
+    rssFetcher: async () => "<?xml version=\"1.0\"?><rss></rss>",
   });
   const api = base(server.port);
 
@@ -276,6 +277,10 @@ try {
     assert.equal(callCount, 5, "讲解轮应为两步（tool-call → text）");
     assert.equal(reply.role, "assistant");
     assert.match(reply.text, /【mindset-tense-marking】/, "回复必须引用知识条目 ID");
+    assert.doesNotMatch(reply.text, /\[\[register:/, "标记应被剥离，不留在展示文本中");
+    assert.equal(reply.annotations.length, 1, "语域标注应被拆分持久化");
+    assert.equal(reply.annotations[0].register, "formal");
+    assert.equal(reply.annotations[0].label, "较正式");
     // 工具结果直接来自随包种子库的真实条目内容（grounding，非模型编造）。
     assert.match(systemsSeen[4]!, /英语每个动词都得带上/);
     assert.match(systemsSeen[4]!, /证据等级：学界共识/);
@@ -290,15 +295,40 @@ try {
     assert.equal(refs[0].layer, 1);
   });
 
+  await check("页面渲染语域标注（带 register 类名的 span）", async () => {
+    const html = await fetch(`${api}/`).then((r) => r.text());
+    assert.match(html, /register-formal/);
+    assert.match(html, /register-casual/);
+    assert.match(html, /register-neutral/);
+  });
+
+  await check("系统会话可手动调档，立即生效", async () => {
+    const reply = await postJson(`${api}/api/messages`, { contact: "system", text: "支架 on-request" });
+    assert.equal(reply.role, "assistant");
+    assert.match(reply.text, /已调至 on-request/);
+  });
+
+  await check("调档后角色消息翻译折叠跟随档位关闭", async () => {
+    const reply = await postJson(`${api}/api/messages`, { contact: "companion", text: "hi again" });
+    assert.equal(reply.role, "assistant");
+    assert.equal(reply.translation, null, "on-request 档不应保存翻译");
+    assert.equal(callCount, 6, "调档后角色轮仍走模型一次");
+  });
+
   await check("持久化跨重启：重开服务后消息仍在", async () => {
     const first = server!;
     await first.close();
     server = undefined;
-    const reopened = await startServer({ dataDir: dir, port: 0, model: fakeModel });
+    const reopened = await startServer({
+      dataDir: dir,
+      port: 0,
+      model: fakeModel,
+      rssFetcher: async () => "<?xml version=\"1.0\"?><rss></rss>",
+    });
     server = reopened;
     try {
       const messages = await getJson(`${base(reopened.port)}/api/messages?contact=companion`);
-      assert.equal(messages.length, 6, "三轮对话的消息应全部保留");
+      assert.equal(messages.length, 8, "四轮对话的消息应全部保留");
       assert.equal(messages[1].translation, REPLY_TRANSLATION);
       const refs = await getJson(
         `${base(reopened.port)}/api/explanations?messageId=${explanationMessageId}`,
@@ -307,8 +337,8 @@ try {
       const system = await getJson(`${base(reopened.port)}/api/messages?contact=system`);
       assert.equal(
         system.length,
-        11,
-        "系统会话不重复播种欢迎文案，课包不重复推送，链接历史保留",
+        13,
+        "系统会话不重复播种欢迎文案，课包不重复推送，链接与调档历史保留",
       );
       // 重启后 tick：第二课仍待预学完成，不推新课；备份按间隔节流。
       const report = reopened.scheduler.tick();
