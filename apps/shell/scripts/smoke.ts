@@ -133,6 +133,7 @@ try {
     model: fakeModel,
     extractor: fakeExtractor,
     simplifier: fakeSimplifier,
+    rssFetcher: async () => "<?xml version=\"1.0\"?><rss></rss>",
   });
   const api = base(server.port);
 
@@ -294,7 +295,12 @@ try {
     const first = server!;
     await first.close();
     server = undefined;
-    const reopened = await startServer({ dataDir: dir, port: 0, model: fakeModel });
+    const reopened = await startServer({
+      dataDir: dir,
+      port: 0,
+      model: fakeModel,
+      rssFetcher: async () => "<?xml version=\"1.0\"?><rss></rss>",
+    });
     server = reopened;
     try {
       const messages = await getJson(`${base(reopened.port)}/api/messages?contact=companion`);
