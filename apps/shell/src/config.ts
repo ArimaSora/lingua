@@ -82,13 +82,12 @@ export function loadConfig(path?: string): ShellConfig {
   return { main: mainConfig, judge };
 }
 
-// 只取判分通道选择（issue #17）：配置缺失 / 非法时返回 undefined（落缺省 LLM
-// 判分），让模型装配处的既有报错负责兜底；注入假模型（e2e 冒烟）时 server 不传
-// path 直接跳过。
-export function loadJudgeSelection(path?: string): JudgeSelection | undefined {
-  try {
-    return loadConfig(path).judge;
-  } catch {
-    return undefined;
-  }
+// 只取判分通道选择（issue #17 复审）：传入 loadConfig 已解析的结果，不重复
+// 解析。fail-fast 口径与同文件 loadConfig 一致：
+// - 配置文件存在但 judge 段非法 → loadConfig 解析时已抛错（静默退回主模型
+//   LLM 判分会让用户以为 jev 已生效，不再吞错）；
+// - 无配置（server 注入假模型的 e2e 冒烟路径）→ 返回 undefined，落缺省 LLM
+//   判分（主模型兼任）。
+export function loadJudgeSelection(config?: ShellConfig): JudgeSelection | undefined {
+  return config?.judge;
 }

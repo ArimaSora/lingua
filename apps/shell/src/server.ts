@@ -46,10 +46,10 @@ import {
   type Wordlist,
 } from "@lingua/core";
 import { createCompanionAgent, type CompanionAgent } from "./agent";
-import { createAmbushLoop, createDefaultJudge } from "./ambush-loop";
+import { createAmbushLoop, createConfiguredJudge } from "./ambush-loop";
 import { createRetellLoop } from "./retell-loop";
 import { createReadabilityExtractor } from "./content-extractor";
-import { loadConfig, loadJudgeSelection, resolveHome } from "./config";
+import { loadConfig, loadJudgeSelection, resolveHome, type ShellConfig } from "./config";
 import { dataDir } from "./data-dir";
 import { createMainSimplifier } from "./simplifier";
 import {
@@ -144,8 +144,7 @@ function readPack(packPath: string | undefined, dir: string): unknown {
   return JSON.parse(readFileSync(DEFAULT_PACK, "utf8")) as unknown;
 }
 
-function buildModel(configPath?: string): LanguageModel {
-  const config = loadConfig(configPath);
+function buildModel(config: ShellConfig): LanguageModel {
   const provider = createOpenAICompatible({
     name: config.main.provider,
     baseURL: config.main.baseUrl,
@@ -194,6 +193,10 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
 
   const store = openMessageStore({ db, clock });
 
+  // 壳层配置只在无注入模型时加载一次（issue #17 复审）：judge 段非法在
+  // loadConfig 处即 fail-fast 抛错，不再静默退回主模型 LLM 判分。
+  const shellConfig = options.model ? undefined : loadConfig(options.configPath);
+
   // 系统会话播种欢迎文案（仅首次）。
   if (store.list({ language, contact: "system" }).length === 0) {
     store.append({ language, contact: "system", role: "assistant", text: SYSTEM_WELCOME });
@@ -205,7 +208,7 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
     options.simplifier ??
     (() => {
       try {
-        return createMainSimplifier(options.model ?? buildModel(options.configPath));
+        return createMainSimplifier(options.model ?? buildModel(shellConfig!));
       } catch {
         // 优雅降级：缺少模型配置时无法改写，难文全部进解锁队列。
         return async () => {
@@ -235,15 +238,14 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
     parser: parseRssFeed,
   });
 
-  const model = options.model ?? buildModel(options.configPath);
+  const model = options.model ?? buildModel(shellConfig!);
   // 知识条目库（issue #12）：随包种子内容，启动时加载并全量校验。
   const knowledge = openKnowledgeStore({ entries: loadKnowledgeEntries() });
   // 埋伏复习运行时接线（issue #07 壳层侧）：每轮确保开放话题并注入角色
   // prompt；用户回合后判分结算。判分器缺省按配置装配（ADR-0010：jev 主 +
   // llm 降级 / 纯 llm，issue #17）；options.judge 注入优先级最高（e2e 假判分器）。
   const ambush = openAmbush({ db, clock });
-  const judgeSelection = options.model ? undefined : loadJudgeSelection(options.configPath);
-  const judge = options.judge ?? createDefaultJudge(db, model, judgeSelection);
+  const judge = options.judge ?? createConfiguredJudge(db, model, loadJudgeSelection(shellConfig));
   const ambushLoop = createAmbushLoop({ db, clock, language, ambush, eventStore, store, judge });
   // 角色转述接线（issue #19）：每轮取一条待投递转述任务注入角色 prompt。
   const retellLoop = createRetellLoop({ pipeline });

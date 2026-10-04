@@ -131,10 +131,11 @@ function judgeModelToLanguageModel(config: JudgeModelConfig): LanguageModel {
   }).chatModel(config.model);
 }
 
-// 判分装配（issue #17，ADR-0010）：按配置选择判分通道——缺省 / llm = LLM 判用法
-// （OpenAI 兼容）；jev = Jev 主判分 + LLM 降级（Jev 非 2xx / 超时 / 响应不可解析
-// 时落到 fallback，保住判分通道）。options.judge 注入优先级高于此处（冒烟不受影响）。
-export function createDefaultJudge(
+// 判分装配（issue #17，ADR-0010）：按配置选择判分通道——无 selection / llm =
+// LLM 判用法（OpenAI 兼容）；jev = Jev 主判分 + LLM 降级（Jev 非 2xx / 超时 /
+// 响应不可解析时落到 fallback，保住判分通道）。options.judge 注入优先级高于
+// 此处（冒烟不受影响）。
+export function createConfiguredJudge(
   db: Database,
   model: LanguageModel,
   selection?: JudgeSelection,

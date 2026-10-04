@@ -9,7 +9,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "smoke": "tsx scripts/smoke.ts",
-    "test": "tsx scripts/smoke.ts"
+    "test": "vitest run && tsx scripts/smoke.ts"
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "^3.0.62",
@@ -22,6 +22,7 @@
   "devDependencies": {
     "@types/jsdom": "^30.0.0",
     "@types/node": "^24.3.0",
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
   }
 }
