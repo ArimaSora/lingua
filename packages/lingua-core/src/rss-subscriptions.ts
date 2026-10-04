@@ -170,6 +170,7 @@ function formatRssPush(params: {
       `【订阅更新·简化版】${result.simplified.title}`,
       `原文难度约 ${result.level}，已为你生成简化版。`,
       result.simplified.body,
+      `原文链接：${sourceUrl}`,
       audioUrl ? `<audio src="${audioUrl}" controls></audio>` : "",
     ]
       .filter(Boolean)

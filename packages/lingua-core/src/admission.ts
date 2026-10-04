@@ -2,6 +2,7 @@ import { rowToChunk } from "./chunk-store";
 import type { Chunk, ChunkRow } from "./chunk-store";
 import type { Clock } from "./clock";
 import type { Database } from "./database";
+import { DAY_MS } from "./day";
 import { admittedEvents, projectState } from "./projection";
 
 // 准入控制（ADR-0016）：候选语块（提取即入池，零成本）与正式语块（进 FSRS 调度，
@@ -24,8 +25,6 @@ export const BALANCE_CAP = 15;
 // 积压闸口带滞后：>30 暂停支出、回落至 ≤20 恢复，其间维持原状。
 export const BACKLOG_PAUSE_THRESHOLD = 30;
 export const BACKLOG_RESUME_THRESHOLD = 20;
-
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 function dayIndex(ms: number): number {
   return Math.floor(ms / DAY_MS);

@@ -482,9 +482,75 @@ try {
     const judgments = await getJson(`${api}/api/judgments?observationId=none`);
     assert.ok(Array.isArray(judgments), "判分列表接口可用");
 
-    // 本话题已结束，下一 tick 会为其投递系统小结——把投递标记写上，
-    // 让后续「系统小结」用例只验证它自己构造的话题（各用例互不串扰）。
-    db.prepare("UPDATE ambush_topics SET digest_sent_at = ? WHERE id = ?").run(Date.now(), topic!.id);
+    // 回合 3（ADR-0013 快修）：系统会话示范过的语块形式算「有辅助」。
+    // 再造两个到期语块，其中 "catch up soon" 由系统消息示范过。
+    insertChunk.run("smoke-amb-3", "long time no see", now);
+    insertChunk.run("smoke-amb-4", "catch up soon", now);
+    for (const chunkId of ["smoke-amb-3", "smoke-amb-4"]) {
+      server!.eventStore.recordInitialLearning({
+        observationId: `smoke-prelearn-${chunkId}`,
+        chunkId,
+        occurredAt: now - 3 * DAY_MS,
+      });
+    }
+    db.prepare(
+      `INSERT INTO messages (id, language, contact, role, text, translation, annotations, created_at)
+       VALUES (?, 'en', 'system', 'assistant', ?, NULL, '[]', ?)`,
+    ).run(`smoke-sys-demo-${Date.now()}`, "今日表达：catch up soon with friends!", now);
+
+    // 回合 3a：起第二个话题（c1–c4 均在 48h 窗内只埋过 1 次，仍 eligible）。
+    await postJson(`${api}/api/messages`, { contact: "companion", text: "morning! anything new?" });
+    const topic2 = db
+      .prepare(
+        `SELECT id, status FROM ambush_topics
+         WHERE id != 'smoke-topic' AND status = 'open' ORDER BY opened_at DESC LIMIT 1`,
+      )
+      .get() as { id: string; status: string } | undefined;
+    assert.ok(topic2, "应规划出第二个开放话题");
+    assert.notEqual(topic2!.id, topic!.id);
+
+    // 回合 3b：用户产出两个新形式 → 判分（假模型判 correct）。
+    await postJson(`${api}/api/messages`, {
+      contact: "companion",
+      text: "not much, just wanted to say long time no see! let's catch up soon!",
+    });
+    const closed2 = db
+      .prepare("SELECT status FROM ambush_topics WHERE id = ?")
+      .get(topic2!.id) as { status: string };
+    assert.equal(closed2.status, "resolved", "第二个话题应结算关闭");
+
+    const hits2 = db
+      .prepare(
+        `SELECT json_extract(payload, '$.chunkId') AS chunk_id, value
+         FROM metric_events WHERE metric_name = 'ambush-hit'
+           AND json_extract(payload, '$.topicId') = ?`,
+      )
+      .all(topic2!.id) as unknown as { chunk_id: string; value: number }[];
+    const hit3 = hits2.find((h) => h.chunk_id === "smoke-amb-3");
+    const hit4 = hits2.find((h) => h.chunk_id === "smoke-amb-4");
+    assert.ok(hit3 && hit4, "两个新语块都应有命中率事件（辅助只进分母）");
+    assert.equal(Number(hit3!.value), 1, "系统未示范 → 独立产出记命中 1");
+    assert.equal(Number(hit4!.value), 0, "系统示范过 → 辅助产出记 0（ADR-0013）");
+
+    const productions2 = db
+      .prepare(
+        `SELECT chunk_id, event_type, assistance FROM events
+         WHERE topic_id = ? AND chunk_id IN ('smoke-amb-3', 'smoke-amb-4')
+           AND event_type != 'initial-learning'`,
+      )
+      .all(topic2!.id) as unknown as { chunk_id: string; event_type: string; assistance: string | null }[];
+    const prod3 = productions2.find((row) => row.chunk_id === "smoke-amb-3");
+    const prod4 = productions2.find((row) => row.chunk_id === "smoke-amb-4");
+    assert.equal(prod3?.event_type, "independent-production");
+    assert.equal(prod3?.assistance, "none");
+    assert.equal(prod4?.event_type, "assisted-production");
+    assert.equal(prod4?.assistance, "assisted", "系统消息示范应判为辅助（ADR-0013）");
+
+    // 两个话题都已结束——把投递标记写上，让后续「系统小结」用例
+    // 只验证它自己构造的话题（各用例互不串扰）。
+    const markSent = db.prepare("UPDATE ambush_topics SET digest_sent_at = ? WHERE id = ?");
+    markSent.run(Date.now(), topic!.id);
+    markSent.run(Date.now(), topic2!.id);
   });
 
   await check("系统小结：话题结束后进入系统会话，角色会话零打断（issue #8）", async () => {
@@ -546,7 +612,7 @@ try {
     server = reopened;
     try {
       const messages = await getJson(`${base(reopened.port)}/api/messages?contact=companion`);
-      assert.equal(messages.length, 12, "六轮对话的消息应全部保留（含埋伏复习两轮，issue #07）");
+      assert.equal(messages.length, 16, "八轮对话的消息应全部保留（含埋伏复习四轮，issue #07）");
       assert.equal(messages[1].translation, REPLY_TRANSLATION);
       const refs = await getJson(
         `${base(reopened.port)}/api/explanations?messageId=${explanationMessageId}`,
@@ -555,10 +621,10 @@ try {
       const system = await getJson(`${base(reopened.port)}/api/messages?contact=system`);
       assert.equal(
         system.length,
-        14,
-        "系统会话不重复播种欢迎文案，课包不重复推送，链接、调档与系统小结历史保留",
+        15,
+        "系统会话不重复播种欢迎文案，课包不重复推送，链接、调档、示范与系统小结历史保留",
       );
-      assert.match(system[13]!.text, /【系统小结】/, "小结随库保留");
+      assert.match(system[14]!.text, /【系统小结】/, "小结随库保留");
       // 重启后 tick：第二课仍待预学完成，不推新课；备份按间隔节流。
       const report = reopened.scheduler.tick();
       assert.equal(

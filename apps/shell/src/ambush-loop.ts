@@ -95,8 +95,10 @@ export function createAmbushLoop(deps: AmbushLoopDeps): AmbushLoop {
       const topicId = activeTopicId;
       activeTopicId = null;
       if (!topicId) return;
-      const recentCompanionTexts = deps.store
-        .list({ language: deps.language, contact: "companion", limit: recentLimit })
+      // ADR-0013：近期暴露的示范既算角色消息，也算系统消息（系统推送里的语块形式）。
+      const recentCompanionTexts = (["companion", "system"] as const).flatMap((contact) =>
+        deps.store.list({ language: deps.language, contact, limit: recentLimit }),
+      )
         .filter((message) => message.role === "assistant")
         .map((message) => message.text);
       try {

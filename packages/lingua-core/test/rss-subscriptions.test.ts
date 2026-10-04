@@ -47,9 +47,9 @@ function makePipeline(db: ReturnType<typeof openDatabase>, clock: FakeClock) {
     clock,
     language: "en",
     extractor: async () => ({ title: "x", body: "x" }),
-    simplifier: async ({ body, url }) => ({
+    simplifier: async ({ body }) => ({
       title: "简化版",
-      body: `[简化版] ${body}\n原文链接：${url}`,
+      body: `[简化版] ${body}`,
     }),
     wordlist: fakeWordlist(),
   });
@@ -137,6 +137,51 @@ describe("RSS 订阅管理", () => {
     expect(systemMessages).toHaveLength(2);
     expect(systemMessages[0]!.text).toMatch(/Agent Essay/);
     expect(systemMessages[1]!.text).toMatch(/Podcast with Transcript/);
+  });
+
+  it("难且易腐的条目推送简化版并附原文链接（mvp 故事 9）", async () => {
+    const db = openDatabase(":memory:");
+    migrate(db);
+    const clock = new FakeClock(T0);
+    const pipeline = openContentPipeline({
+      db,
+      clock,
+      language: "en",
+      extractor: async () => ({ title: "x", body: "x" }),
+      simplifier: async ({ body }) => ({ title: "简化版", body: `[简化版] ${body}` }),
+      wordlist: fakeWordlist(),
+    });
+    const messages = openMessageStore({ db, clock });
+    const rss = openRssSubscriptions({
+      db,
+      clock,
+      language: "en",
+      pipeline,
+      messageStore: messages,
+      fetcher: async () => `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Test Feed</title>
+    <item>
+      <title>Hard News</title>
+      <link>https://example.com/news/2026/01/story</link>
+      <guid>hard-1</guid>
+      <pubDate>Thu, 01 Jan 2026 09:00:00 GMT</pubDate>
+      <description>The government will increase spending however substantial ubiquitous reforms continue.</description>
+    </item>
+  </channel>
+</rss>`,
+      parser: parseRssFeed,
+    });
+    rss.addFeed({ url: "https://example.com/feed.xml", kind: "rss" });
+
+    const report = await rss.poll();
+
+    expect(report.pushed).toHaveLength(1);
+    expect(report.pushed[0]!.entry.id).toBe("hard-1");
+    const text = messages.list({ language: "en", contact: "system" })[0]!.text;
+    expect(text).toMatch(/【订阅更新·简化版】简化版/);
+    expect(text).toContain("原文链接：https://example.com/news/2026/01/story");
   });
 
   it("重复轮询不产生重复条目与重复推送", async () => {

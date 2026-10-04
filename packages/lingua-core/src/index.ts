@@ -116,6 +116,7 @@ export type { ErrorLogEntry, RecordErrorLogInput } from "./error-log";
 export { openExplanationLog } from "./explanation-log";
 export type { ExplanationLog, ExplanationLogOptions, ExplanationRef } from "./explanation-log";
 export { defaultParams, openEventStore } from "./event-store";
+export { buildJudgePrompt, createJudge } from "./judge";
 export type {
   Assistance,
   CorrectObservationInput,
@@ -157,7 +158,6 @@ export type {
   MessageStore,
   MessageStoreOptions,
 } from "./message-store";
-export { buildJudgePrompt, createJudge } from "./judge";
 export type {
   Judge,
   JudgeOptions,
