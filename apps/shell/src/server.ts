@@ -2,7 +2,6 @@ import { createServer, type Server } from "node:http";
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import type { LanguageModel } from "ai";
 import {
   APP_OPEN_METRIC,
@@ -30,6 +29,7 @@ import {
   recordMetric,
   renderPendingSystemDigests,
   runBackup,
+  SECRET_MASK,
   SystemClock,
   type CharacterCard,
   type ContentExtractor,
@@ -49,12 +49,24 @@ import { createCompanionAgent, type CompanionAgent } from "./agent";
 import { createAmbushLoop, createConfiguredJudge } from "./ambush-loop";
 import { createRetellLoop } from "./retell-loop";
 import { createReadabilityExtractor } from "./content-extractor";
-import { loadConfig, loadJudgeSelection, resolveHome, type ShellConfig } from "./config";
+import {
+  findConfigPath,
+  loadConfig,
+  loadJudgeSelection,
+  persistMainApiKey,
+  resolveHome,
+} from "./config";
 import { dataDir } from "./data-dir";
+import {
+  constantModelSource,
+  createModelRegistry,
+  type ModelSource,
+} from "./model-registry";
 import { createMainSimplifier } from "./simplifier";
 import {
   formatIngestReply,
   handleSystemMessage,
+  SET_API_KEY_RE,
   SystemUrlIntentError,
   SYSTEM_CONTACT_NAME,
   SYSTEM_WELCOME,
@@ -144,15 +156,6 @@ function readPack(packPath: string | undefined, dir: string): unknown {
   return JSON.parse(readFileSync(DEFAULT_PACK, "utf8")) as unknown;
 }
 
-function buildModel(config: ShellConfig): LanguageModel {
-  const provider = createOpenAICompatible({
-    name: config.main.provider,
-    baseURL: config.main.baseUrl,
-    apiKey: config.main.apiKey,
-  });
-  return provider.chatModel(config.main.model);
-}
-
 function json(res: import("node:http").ServerResponse, status: number, body: unknown): void {
   const payload = JSON.stringify(body);
   res.writeHead(status, { "content-type": "application/json; charset=utf-8" });
@@ -195,20 +198,42 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
 
   // 壳层配置只在无注入模型时加载一次（issue #17 复审）：judge 段非法在
   // loadConfig 处即 fail-fast 抛错，不再静默退回主模型 LLM 判分。
+  // 零配置启动：无配置文件或 api_key 为空不阻止启动，模型处于「未配置」
+  // 状态，密钥可在运行时用系统会话「设置密钥」命令填入（model-registry）。
   const shellConfig = options.model ? undefined : loadConfig(options.configPath);
+  const modelSource: ModelSource = options.model
+    ? constantModelSource(options.model)
+    : // 无注入模型时 shellConfig 必已加载（上一行同一条件）。
+      createModelRegistry(shellConfig!.main);
+  // 运行时密钥注入：生效于当前进程并持久化到 config.toml（含新生成）。
+  const setApiKey = (apiKey: string): string => {
+    modelSource.setApiKey(apiKey);
+    const target = findConfigPath() ?? join(dir, "config.toml");
+    persistMainApiKey(target, apiKey);
+    return target;
+  };
 
   // 系统会话播种欢迎文案（仅首次）。
   if (store.list({ language, contact: "system" }).length === 0) {
     store.append({ language, contact: "system", role: "assistant", text: SYSTEM_WELCOME });
   }
+  // 未配置模型时追加一条指引（幂等：历史中已有则不重复）。
+  if (!modelSource.configured()) {
+    const notice =
+      "主模型密钥未配置：角色对话、讲解与改写暂不可用。在系统会话发送「设置密钥 <你的 API key>」即可立即启用（无需重启）。";
+    if (!store.list({ language, contact: "system" }).some((m) => m.text.includes("模型密钥未配置"))) {
+      store.append({ language, contact: "system", role: "assistant", text: notice });
+    }
+  }
 
-  // 内容管道（issue #10）：无 key 时 simplifier 抛错，pipeline 自动降级为解锁队列。
+  // 内容管道（issue #10）：模型未配置/改写失败时 simplifier 抛错，pipeline
+  // 自动降级为解锁队列或角色转述（issue #19）。
   const extractor = options.extractor ?? createReadabilityExtractor();
   const simplifier =
     options.simplifier ??
     (() => {
       try {
-        return createMainSimplifier(options.model ?? buildModel(shellConfig!));
+        return createMainSimplifier(modelSource);
       } catch {
         // 优雅降级：缺少模型配置时无法改写，难文全部进解锁队列。
         return async () => {
@@ -238,19 +263,17 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
     parser: parseRssFeed,
   });
 
-  const model = options.model ?? buildModel(shellConfig!);
-  // 知识条目库（issue #12）：随包种子内容，启动时加载并全量校验。
   const knowledge = openKnowledgeStore({ entries: loadKnowledgeEntries() });
   // 埋伏复习运行时接线（issue #07 壳层侧）：每轮确保开放话题并注入角色
   // prompt；用户回合后判分结算。判分器缺省按配置装配（ADR-0010：jev 主 +
   // llm 降级 / 纯 llm，issue #17）；options.judge 注入优先级最高（e2e 假判分器）。
   const ambush = openAmbush({ db, clock });
-  const judge = options.judge ?? createConfiguredJudge(db, model, loadJudgeSelection(shellConfig));
+  const judge = options.judge ?? createConfiguredJudge(db, modelSource, loadJudgeSelection(shellConfig));
   const ambushLoop = createAmbushLoop({ db, clock, language, ambush, eventStore, store, judge });
   // 角色转述接线（issue #19）：每轮取一条待投递转述任务注入角色 prompt。
   const retellLoop = createRetellLoop({ pipeline });
   const agent: CompanionAgent = createCompanionAgent({
-    model,
+    model: modelSource,
     db,
     clock,
     card,
@@ -438,17 +461,20 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
             return;
           }
           if (body.contact === "system") {
-            store.append({ language, contact: "system", role: "user", text: body.text.trim() });
+            const userText = body.text.trim();
+            const keyMatch = SET_API_KEY_RE.exec(userText);
+            const userMessage = store.append({ language, contact: "system", role: "user", text: userText });
             let systemResult: ReturnType<typeof handleSystemMessage>;
             try {
               systemResult = handleSystemMessage({
-                text: body.text.trim(),
+                text: userText,
                 db,
                 clock,
                 bootstrap,
                 pipeline,
                 language,
                 rss,
+                onSetApiKey: options.model ? () => null : setApiKey,
               });
             } catch (error) {
               if (error instanceof SystemUrlIntentError) {
@@ -457,6 +483,10 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
               } else {
                 throw error;
               }
+            }
+            // 密钥不回显：设置密钥的用户消息落库后立刻改写脱敏（SECRET_MASK）。
+            if (keyMatch) {
+              store.redact(userMessage.id, userText.replace(keyMatch[1]!, SECRET_MASK));
             }
             const reply = store.append({
               language,

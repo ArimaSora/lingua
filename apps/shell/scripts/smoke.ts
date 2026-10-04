@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { MockLanguageModelV4 } from "ai/test";
@@ -672,6 +672,59 @@ try {
     } finally {
       await reopened.close();
       server = undefined;
+    }
+  });
+
+  await check("零配置启动：无密钥可启动，系统会话补钥即刻生效", async () => {
+    const dir2 = mkdtempSync(join(tmpdir(), "lingua-smoke-nokey-"));
+    const prevConfig = process.env.LINGUA_CONFIG;
+    // 指向不存在路径 → loadConfig 落默认值，与宿主机器是否已有配置无关。
+    const configPath = join(dir2, "config.toml");
+    process.env.LINGUA_CONFIG = configPath;
+    const bare = await startServer({
+      dataDir: dir2,
+      port: 0,
+      rssFetcher: async () => "<?xml version=\"1.0\"?><rss></rss>",
+    });
+    try {
+      const api2 = base(bare.port);
+      // 启动即成功；系统会话含补钥指引。
+      const system = await getJson(`${api2}/api/messages?contact=system`);
+      assert.ok(
+        system.some((m: { text: string }) => /模型密钥未配置/.test(m.text)),
+        "未配置时应提示补钥指引",
+      );
+      // 角色对话给出友好报错而不是启动崩溃。
+      const res = await fetch(`${api2}/api/messages`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ contact: "companion", text: "hi" }),
+      });
+      assert.equal(res.status, 500);
+      const err = await res.json();
+      assert.match(err.error, /设置密钥/, "报错应指引补钥路径");
+
+      // 系统会话补钥：确认回复不回显密钥；历史消息脱敏；密钥持久化落盘。
+      const reply = await postJson(`${api2}/api/messages`, {
+        contact: "system",
+        text: "设置密钥 sk-smoke-secret-999",
+      });
+      assert.match(reply.text, /已保存主模型密钥/);
+      assert.doesNotMatch(reply.text, /sk-smoke-secret-999/, "回复不得回显密钥");
+      const after = await getJson(`${api2}/api/messages?contact=system`);
+      const keyMsg = after.find(
+        (m: { role: string; text: string }) => m.role === "user" && m.text.includes("设置密钥"),
+      );
+      assert.ok(keyMsg, "应存在设置密钥的用户消息");
+      assert.doesNotMatch(keyMsg.text, /sk-smoke-secret-999/, "聊天历史必须脱敏");
+      assert.match(keyMsg.text, /\*{8}/, "脱敏为 SECRET_MASK");
+      const saved = readFileSync(configPath, "utf8");
+      assert.match(saved, /sk-smoke-secret-999/, "密钥应持久化到配置文件");
+    } finally {
+      await bare.close();
+      if (prevConfig === undefined) delete process.env.LINGUA_CONFIG;
+      else process.env.LINGUA_CONFIG = prevConfig;
+      rmSync(dir2, { recursive: true, force: true, maxRetries: 5, retryDelay: 300 });
     }
   });
 

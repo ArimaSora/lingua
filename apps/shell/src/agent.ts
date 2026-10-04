@@ -1,4 +1,4 @@
-import { generateText, jsonSchema, stepCountIs, tool, type LanguageModel } from "ai";
+import { generateText, jsonSchema, stepCountIs, tool } from "ai";
 import {
   addRelationshipFact,
   effectiveRegisterRange,
@@ -21,6 +21,7 @@ import {
   type ScaffoldingPolicy,
   type ScaffoldingTier,
 } from "@lingua/core";
+import type { ModelSource } from "./model-registry";
 
 // 好友角色 agent loop（issue #5）：Web Chat 直连，无渠道抽象层（ADR-0017）。
 // 每轮：持久化用户消息 → renderDigest 注入 → Vercel AI SDK 工具循环 →
@@ -152,7 +153,9 @@ export type CompanionAgent = {
 };
 
 export type CompanionAgentDeps = {
-  model: LanguageModel;
+  // 模型经 ModelSource 取（零配置启动后可运行时填入密钥，无需重启）；
+  // 未配置时 get() 抛带指引的友好错误。
+  model: ModelSource;
   db: Database;
   clock: Clock;
   card: CharacterCard;
@@ -164,7 +167,7 @@ export type CompanionAgentDeps = {
 };
 
 export function createCompanionAgent(deps: CompanionAgentDeps): CompanionAgent {
-  const { model, db, clock, card, knowledge } = deps;
+  const { db, clock, card, knowledge } = deps;
   const language = card.languagePair.target;
   const messages = openMessageStore({ db, clock });
   const catalog = knowledge.catalog({ language });
@@ -252,7 +255,7 @@ export function createCompanionAgent(deps: CompanionAgentDeps): CompanionAgent {
       });
 
       const result = await generateText({
-        model,
+        model: deps.model.get(),
         system,
         messages: history.map((message) => ({ ...message })),
         tools: { remember_fact: rememberFact, lookup_knowledge_entry: lookupKnowledgeEntry },
