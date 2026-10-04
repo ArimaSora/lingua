@@ -101,6 +101,7 @@ describe("schema", () => {
       "expires_at",
       "simplified_source_id",
       "pipeline_status",
+      "audio_url",
     ]) {
       expect(contentColumns).toContain(column);
     }
@@ -165,6 +166,54 @@ describe("schema", () => {
       "language",
     ]) {
       expect(placementColumns).toContain(column);
+    }
+  });
+
+  it("tracks RSS subscription poll state and audio content (issue #11)", () => {
+    const db = openDatabase(":memory:");
+    migrate(db);
+
+    const feedColumns = db
+      .prepare("PRAGMA table_info(feeds)")
+      .all()
+      .map((row) => (row as { name: string }).name);
+    for (const column of ["last_fetched_at", "fetch_interval_ms"]) {
+      expect(feedColumns).toContain(column);
+    }
+
+    const contentColumns = db
+      .prepare("PRAGMA table_info(content_items)")
+      .all()
+      .map((row) => (row as { name: string }).name);
+    expect(contentColumns).toContain("audio_url");
+  });
+
+  it("tracks register annotations and scaffolding tier control (issue #13)", () => {
+    const db = openDatabase(":memory:");
+    migrate(db);
+
+    const messageColumns = db
+      .prepare("PRAGMA table_info(messages)")
+      .all()
+      .map((row) => (row as { name: string }).name);
+    expect(messageColumns).toContain("annotations");
+
+    const profileColumns = db
+      .prepare("PRAGMA table_info(learner_profiles)")
+      .all()
+      .map((row) => (row as { name: string }).name);
+    for (const column of [
+      "scaffolding_tier",
+      "temporary_tier",
+      "temporary_until",
+      "pending_suggested_tier",
+      "pending_reason",
+      "pending_at",
+      "last_suggested_tier",
+      "last_suggested_at",
+      "last_suggestion_response",
+    ]) {
+      expect(profileColumns).toContain(column);
     }
   });
 });

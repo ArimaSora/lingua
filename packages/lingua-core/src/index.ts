@@ -42,13 +42,10 @@ export {
   getCharacterCard,
   loadCharacterCard,
   parseCharacterCard,
-  REGISTER_LEVELS,
 } from "./character-card";
 export type {
   CharacterCard,
   LanguagePair,
-  Register,
-  RegisterRange,
 } from "./character-card";
 export { matchChunks } from "./chunk-matching";
 export type {
@@ -79,6 +76,7 @@ export type {
   ContentPipeline,
   ContentPipelineOptions,
   ContentSimplifier,
+  IngestProvidedInput,
   IngestResult,
 } from "./content-pipeline";
 export { MIGRATION_VERSIONS, migrate, openDatabase, SCHEMA_VERSION } from "./database";
@@ -172,8 +170,49 @@ export type { MetricInput, MetricName } from "./metrics";
 export { DEFAULT_PFA_PARAMS, pfaMastery } from "./pfa";
 export type { PfaParams } from "./pfa";
 export type { ChunkMastery, Projection, ProjectionMode, SkillMastery } from "./projection";
-export { DEFAULT_SCAFFOLDING_TIER, parseScaffoldingTier, SCAFFOLDING_TIERS, scaffoldingPolicy } from "./scaffolding";
-export type { L1Rescue, ScaffoldingPolicy, ScaffoldingTier } from "./scaffolding";
+export {
+  acceptScaffoldingSuggestion,
+  clearTemporaryScaffoldingTier,
+  DEFAULT_SCAFFOLDING_TIER,
+  effectiveRegisterRange,
+  ensureLearnerProfile,
+  formatScaffoldingSuggestion,
+  getPendingSuggestion,
+  getScaffoldingTier,
+  parseScaffoldingTier,
+  proposeScaffoldingTier,
+  REGISTER_LABELS,
+  REGISTER_LEVELS,
+  registerCeiling,
+  rejectScaffoldingSuggestion,
+  SCAFFOLDING_TIER_LABELS,
+  SCAFFOLDING_TIERS,
+  scaffoldingPolicy,
+  scaffoldingPolicyDescription,
+  setScaffoldingTier,
+  splitRegisterAnnotations,
+} from "./scaffolding";
+export type {
+  L1Rescue,
+  Register,
+  RegisterAnnotation,
+  RegisterRange,
+  ScaffoldingPolicy,
+  ScaffoldingSuggestion,
+  ScaffoldingTier,
+  ScaffoldingTierSource,
+} from "./scaffolding";
+export { openRssSubscriptions, parseRssFeed } from "./rss-subscriptions";
+export type {
+  FeedKind,
+  RssEntry,
+  RssFetcher,
+  RssParser,
+  RssPollReport,
+  RssSubscriptions,
+  RssSubscriptionsOptions,
+  StoredFeed,
+} from "./rss-subscriptions";
 export { openScheduler } from "./scheduler";
 export type { Scheduler, SchedulerOptions, SchedulerTask, TaskError, TickReport } from "./scheduler";
 export { openUnlockQueue } from "./unlock-queue";

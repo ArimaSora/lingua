@@ -3,6 +3,9 @@ import type { Database } from "./database";
 import {
   DEFAULT_SCAFFOLDING_TIER,
   parseScaffoldingTier,
+  REGISTER_LEVELS,
+  type Register,
+  type RegisterRange,
   type ScaffoldingTier,
 } from "./scaffolding";
 
@@ -10,10 +13,6 @@ import {
 // （兴趣层、母语支架档位、语域范围、语言对）。卡片存为策展事实后进入 digest
 // 的「角色须知」段（见 loadCharacterCard）。
 
-export const REGISTER_LEVELS = ["casual", "neutral", "formal"] as const;
-export type Register = (typeof REGISTER_LEVELS)[number];
-
-export type RegisterRange = { from: Register; to: Register };
 export type LanguagePair = { native: string; target: string };
 
 export type CharacterCard = {
