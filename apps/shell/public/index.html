@@ -1,0 +1,460 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Lingua</title>
+<style>
+  :root {
+    --bg: #f3f4f6;
+    --sidebar: #1f2937;
+    --sidebar-active: #374151;
+    --sidebar-text: #e5e7eb;
+    --bubble-user: #2563eb;
+    --bubble-peer: #ffffff;
+    --border: #e5e7eb;
+    --muted: #6b7280;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    height: 100vh;
+    display: flex;
+  }
+  #sidebar {
+    width: 220px;
+    background: var(--sidebar);
+    color: var(--sidebar-text);
+    display: flex;
+    flex-direction: column;
+    padding: 12px 8px;
+    gap: 4px;
+  }
+  #sidebar h1 {
+    font-size: 15px;
+    font-weight: 600;
+    margin: 4px 10px 12px;
+    letter-spacing: 0.05em;
+  }
+  .contact {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    border: none;
+    background: transparent;
+    color: inherit;
+    font-size: 14px;
+    text-align: left;
+    width: 100%;
+  }
+  .contact:hover { background: var(--sidebar-active); }
+  .contact.active { background: var(--sidebar-active); }
+  .avatar {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    flex-shrink: 0;
+    background: #4b5563;
+  }
+  .contact[data-id="companion"] .avatar { background: #7c3aed; }
+  .contact[data-id="system"] .avatar { background: #0f766e; }
+  #main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  #chat-header {
+    padding: 12px 20px;
+    background: #fff;
+    border-bottom: 1px solid var(--border);
+    font-weight: 600;
+  }
+  #messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .row { display: flex; }
+  .row.user { justify-content: flex-end; }
+  .bubble {
+    max-width: 70%;
+    padding: 10px 14px;
+    border-radius: 14px;
+    line-height: 1.5;
+    font-size: 14px;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .row.user .bubble { background: var(--bubble-user); color: #fff; border-bottom-right-radius: 4px; }
+  .row.assistant .bubble {
+    background: var(--bubble-peer);
+    border: 1px solid var(--border);
+    border-bottom-left-radius: 4px;
+  }
+  .bubble details {
+    margin-top: 6px;
+    border-top: 1px dashed var(--border);
+    padding-top: 6px;
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .bubble summary { cursor: pointer; user-select: none; outline: none; }
+  .register {
+    border-bottom: 2px dotted;
+    cursor: help;
+  }
+  .register-casual { border-color: #f59e0b; }
+  .register-neutral { border-color: #9ca3af; }
+  .register-formal { border-color: #3b82f6; }
+  #composer {
+    display: flex;
+    gap: 10px;
+    padding: 14px 20px;
+    background: #fff;
+    border-top: 1px solid var(--border);
+  }
+  #input {
+    flex: 1;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 14px;
+    font-family: inherit;
+    resize: none;
+    outline: none;
+  }
+  #input:focus { border-color: var(--bubble-user); }
+  #send {
+    border: none;
+    border-radius: 10px;
+    padding: 0 22px;
+    background: var(--bubble-user);
+    color: #fff;
+    font-size: 14px;
+    cursor: pointer;
+  }
+  #send:disabled { opacity: 0.5; cursor: default; }
+  #status { font-size: 12px; color: var(--muted); padding: 0 20px 8px; background: #fff; }
+  #metrics {
+    margin-top: auto;
+    padding: 12px;
+    background: var(--sidebar-active);
+    border-radius: 8px;
+    font-size: 12px;
+  }
+  #metrics h2 {
+    font-size: 12px;
+    font-weight: 600;
+    margin: 0 0 8px;
+    color: var(--sidebar-text);
+  }
+  #metrics .metric {
+    display: flex;
+    justify-content: space-between;
+    color: var(--sidebar-text);
+    margin-bottom: 4px;
+  }
+  #metrics .metric span:last-child { font-weight: 600; }
+  #metrics .series { display: flex; gap: 2px; align-items: flex-end; height: 24px; margin-top: 6px; }
+  #metrics .bar {
+    flex: 1;
+    background: #10b981;
+    border-radius: 2px;
+    min-height: 2px;
+  }
+  .bubble audio { display: block; max-width: 100%; margin: 6px 0; }
+</style>
+</head>
+<body>
+  <nav id="sidebar">
+    <h1>Lingua</h1>
+    <div id="metrics">
+      <h2>指标（近 28 天）</h2>
+      <div class="metric"><span>埋伏命中率</span><span id="m-ambush">—</span></div>
+      <div class="metric"><span>话题回应率</span><span id="m-response">—</span></div>
+      <div class="metric"><span>次日留存</span><span id="m-d1">—</span></div>
+      <div class="metric"><span>7 日留存</span><span id="m-d7">—</span></div>
+      <div class="series" id="m-series"></div>
+    </div>
+    <a href="/review.html" style="display:block;color:#e5e7eb;text-decoration:none;padding:10px;border-radius:8px;font-size:14px;">角色眼中的你</a>
+  </nav>
+  <div id="main">
+    <div id="chat-header"></div>
+    <div id="messages"></div>
+    <div id="status"></div>
+    <form id="composer">
+      <textarea id="input" rows="2" placeholder="发消息…（Enter 发送，Shift+Enter 换行）"></textarea>
+      <button id="send" type="submit">发送</button>
+    </form>
+  </div>
+<script>
+  const sidebar = document.getElementById("sidebar");
+  const header = document.getElementById("chat-header");
+  const messagesEl = document.getElementById("messages");
+  const statusEl = document.getElementById("status");
+  const form = document.getElementById("composer");
+  const input = document.getElementById("input");
+  const sendButton = document.getElementById("send");
+
+  let contacts = [];
+  let activeContact = null;
+  let renderedIds = new Set();
+
+  async function api(path, options) {
+    const res = await fetch(path, options);
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error || `请求失败（${res.status}）`);
+    }
+    return res.json();
+  }
+
+  function renderContacts() {
+    for (const contact of contacts) {
+      const button = document.createElement("button");
+      button.className = "contact";
+      button.dataset.id = contact.id;
+      const avatar = document.createElement("div");
+      avatar.className = "avatar";
+      avatar.textContent = contact.name.slice(0, 1);
+      const name = document.createElement("span");
+      name.textContent = contact.name;
+      button.append(avatar, name);
+      button.addEventListener("click", () => selectContact(contact.id));
+      sidebar.appendChild(button);
+    }
+  }
+
+  function selectContact(id) {
+    activeContact = id;
+    renderedIds = new Set();
+    messagesEl.replaceChildren();
+    for (const el of sidebar.querySelectorAll(".contact")) {
+      el.classList.toggle("active", el.dataset.id === id);
+    }
+    const contact = contacts.find((c) => c.id === id);
+    header.textContent = contact ? contact.name : "";
+    statusEl.textContent = "";
+    void refreshMessages();
+  }
+
+  // 系统推送的预学清单标记（@lingua/core bootstrap）：标记内首行是折叠摘要，
+  // 其余为清单本体（每条语块只有例句 + 一句直觉规律，默认只给这层）。
+  const PRELEARNING_OPEN = "[[预学清单]]";
+  const PRELEARNING_CLOSE = "[[/预学清单]]";
+
+  // 系统小结的留白式纠错标记（issue #8）：折叠时只给现象（首行），
+  // 点开才看参考答案（其余行）——纠错本身也是提取练习。
+  const CORRECTION_OPEN = "[[纠错]]";
+  const CORRECTION_CLOSE = "[[/纠错]]";
+
+  // RSS/播客推送的音频标记（issue #11）：服务端把 <audio> 标签写进推送文本，
+  // 前端只认这个受控形状，用 DOM API 换成真实 audio 元素（不走 innerHTML，
+  // URL 进属性而非 HTML 解析，避免注入）。
+  const AUDIO_TAG_RE = /<audio\b[^>]*>/i;
+
+  function appendTextWithAudio(bubble, text) {
+    const match = AUDIO_TAG_RE.exec(text);
+    if (!match) {
+      bubble.textContent = text;
+      return;
+    }
+    const before = text.slice(0, match.index).trim();
+    const after = text.slice(match.index + match[0].length).trim();
+    const src = /src="([^"]*)"/.exec(match[0])?.[1] ?? "";
+    if (before) bubble.appendChild(document.createTextNode(before));
+    const audio = document.createElement("audio");
+    if (src) audio.src = src;
+    audio.controls = true;
+    audio.preload = "none";
+    bubble.appendChild(audio);
+    if (after) bubble.appendChild(document.createTextNode(after));
+  }
+
+  function appendTextWithPrelearning(bubble, text) {
+    const openIndex = text.indexOf(PRELEARNING_OPEN);
+    const closeIndex = text.indexOf(PRELEARNING_CLOSE);
+    if (openIndex === -1 || closeIndex <= openIndex) {
+      bubble.textContent = text;
+      return;
+    }
+    const before = text.slice(0, openIndex).trim();
+    const inner = text.slice(openIndex + PRELEARNING_OPEN.length, closeIndex).trim();
+    const after = text.slice(closeIndex + PRELEARNING_CLOSE.length).trim();
+    const lines = inner.split("\n");
+    const beforeEl = document.createElement("div");
+    beforeEl.textContent = before;
+    const details = document.createElement("details");
+    const summary = document.createElement("summary");
+    summary.textContent = lines[0] || "预学清单";
+    const body = document.createElement("div");
+    body.textContent = lines.slice(1).join("\n");
+    details.append(summary, body);
+    const afterEl = document.createElement("div");
+    afterEl.textContent = after;
+    bubble.append(beforeEl, details, afterEl);
+  }
+
+  function appendTextWithCorrection(bubble, text) {
+    const openIndex = text.indexOf(CORRECTION_OPEN);
+    const closeIndex = text.indexOf(CORRECTION_CLOSE);
+    if (openIndex === -1 || closeIndex <= openIndex) {
+      appendTextWithPrelearning(bubble, text);
+      return;
+    }
+    const before = text.slice(0, openIndex).trim();
+    const inner = text.slice(openIndex + CORRECTION_OPEN.length, closeIndex).trim();
+    const after = text.slice(closeIndex + CORRECTION_CLOSE.length).trim();
+    const lines = inner.split("\n");
+    const beforeEl = document.createElement("div");
+    beforeEl.textContent = before;
+    const details = document.createElement("details");
+    const summary = document.createElement("summary");
+    summary.textContent = lines[0] || "纠错：点开看参考答案";
+    const body = document.createElement("div");
+    body.textContent = lines.slice(1).join("\n");
+    details.append(summary, body);
+    const afterEl = document.createElement("div");
+    afterEl.textContent = after;
+    bubble.append(beforeEl, details, afterEl);
+  }
+
+  function appendAnnotatedText(bubble, text, annotations) {
+    const sorted = [...annotations].sort((a, b) => a.start - b.start);
+    let cursor = 0;
+    for (const annotation of sorted) {
+      if (annotation.start > cursor) {
+        bubble.appendChild(document.createTextNode(text.slice(cursor, annotation.start)));
+      }
+      const span = document.createElement("span");
+      span.className = `register register-${annotation.register}`;
+      span.title = annotation.label;
+      span.textContent = text.slice(annotation.start, annotation.end);
+      bubble.appendChild(span);
+      cursor = annotation.end;
+    }
+    if (cursor < text.length) {
+      bubble.appendChild(document.createTextNode(text.slice(cursor)));
+    }
+  }
+
+  function renderMessage(message) {
+    if (renderedIds.has(message.id)) return;
+    renderedIds.add(message.id);
+    const row = document.createElement("div");
+    row.className = `row ${message.role}`;
+    const bubble = document.createElement("div");
+    bubble.className = "bubble";
+    if (message.text.includes("<audio")) {
+      appendTextWithAudio(bubble, message.text);
+    } else if (message.annotations && message.annotations.length > 0) {
+      appendAnnotatedText(bubble, message.text, message.annotations);
+    } else {
+      appendTextWithCorrection(bubble, message.text);
+    }
+    if (message.translation) {
+      // 可展开中文翻译（A1–A2 支架档）：默认折叠，点开即读。
+      const details = document.createElement("details");
+      const summary = document.createElement("summary");
+      summary.textContent = "中文翻译";
+      const body = document.createElement("div");
+      body.textContent = message.translation;
+      details.append(summary, body);
+      bubble.appendChild(details);
+    }
+    row.appendChild(bubble);
+    messagesEl.appendChild(row);
+  }
+
+  async function refreshMessages() {
+    if (!activeContact) return;
+    const messages = await api(`/api/messages?contact=${activeContact}`);
+    for (const message of messages) renderMessage(message);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+
+  async function send(text) {
+    sendButton.disabled = true;
+    statusEl.textContent = "对方正在输入…";
+    try {
+      const reply = await api("/api/messages", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ contact: activeContact, text }),
+      });
+      await refreshMessages();
+      statusEl.textContent = "";
+      return reply;
+    } catch (error) {
+      statusEl.textContent = error.message;
+    } finally {
+      sendButton.disabled = false;
+      input.focus();
+    }
+  }
+
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const text = input.value.trim();
+    if (!text || !activeContact) return;
+    input.value = "";
+    void send(text);
+  });
+  input.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      form.requestSubmit();
+    }
+  });
+
+  function pct(value) {
+    return `${Math.round(value * 100)}%`;
+  }
+
+  function renderMasterySeries(series) {
+    const el = document.getElementById("m-series");
+    el.replaceChildren();
+    if (!series.length) return;
+    const max = Math.max(1, ...series.map((p) => p.averageMastery));
+    for (const point of series) {
+      const bar = document.createElement("div");
+      bar.className = "bar";
+      bar.style.height = `${Math.round((point.averageMastery / max) * 100)}%`;
+      bar.title = `${point.date}: ${pct(point.averageMastery)}`;
+      el.appendChild(bar);
+    }
+  }
+
+  async function refreshMetrics() {
+    try {
+      const metrics = await api("/api/metrics");
+      document.getElementById("m-ambush").textContent = pct(metrics.ambushHitRate);
+      document.getElementById("m-response").textContent = pct(metrics.topicResponseRate);
+      document.getElementById("m-d1").textContent = pct(metrics.retention.d1);
+      document.getElementById("m-d7").textContent = pct(metrics.retention.d7);
+      renderMasterySeries(metrics.masterySeries);
+    } catch (error) {
+      console.warn("指标刷新失败", error.message);
+    }
+  }
+
+  (async function boot() {
+    contacts = await api("/api/contacts");
+    renderContacts();
+    selectContact("companion");
+    await refreshMetrics();
+    setInterval(() => void refreshMessages().catch(() => {}), 3000);
+  })().catch((error) => {
+    statusEl.textContent = error.message;
+  });
+</script>
+</body>
+</html>

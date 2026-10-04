@@ -29,12 +29,28 @@ A personal language-learning agent that hides pre-learning and review inside con
 ```bash
 pnpm install
 pnpm typecheck   # 全部包 tsc --noEmit
-pnpm test        # 全部测试（假时钟驱动，无真实等待）
+pnpm test        # 全部测试（假时钟驱动，无真实等待）+ Web Chat 假模型 e2e 冒烟
 pnpm lingua init # 初始化数据目录与 SQLite schema（默认 ~/.lingua/，可用 LINGUA_DATA_DIR 覆盖）
 ```
 
+## Web Chat（MVP）
+
+IM 界面里有两个联系人：**系统**（纯工具文案，无人格）与**好友角色**（默认 Maya，网聊风格英语朋友）。
+
+```bash
+pnpm lingua init        # 生成数据目录、schema 与 config.toml 模板（填入 [models.main] 的 api_key，如 DeepSeek key）
+pnpm lingua serve       # 启动 Web Chat，默认 http://localhost:3939（--port 可改）
+```
+
+- 配置查找顺序：`LINGUA_CONFIG` 环境变量 → `./config.toml` → 数据目录下的 `config.toml`（`lingua init` 生成处，默认 `~/.lingua/`）；config.toml 已 gitignore，永不入库。
+- 消息持久化在数据目录的 SQLite（schema v4 起含 `messages` 表），重启不丢。
+- A1–A2 支架档（默认）：角色每条英文消息附**可展开中文翻译**（点开「中文翻译」即读）；档位规则在 lingua-core（`scaffoldingPolicy`），B1 及以上不附翻译。
+- 角色卡：首次启动把内置默认卡写入数据库；把自定义卡片 JSON 放到 `~/.lingua/companion.json` 即可在下个全新数据目录生效（字段见 `apps/shell/cards/default-companion.json`：人格基底 + 兴趣层 + 母语支架档位 + 语域范围 + 语言对）。
+
+**手工验收（需要真实 API key）**：按上文配置 DeepSeek key → `pnpm lingua serve` → 浏览器打开 → 与好友角色完成一轮对话，确认：回复到达且消息刷新后仍在（持久化）；角色消息下方有「中文翻译」折叠条；切到系统会话，存在欢迎文案且任何输入只得到固定工具文案。无 key 环境下 `pnpm --filter @lingua/shell smoke` 以假模型跑通同一条链路（工具循环、翻译拆分、跨重启持久化）。
+
 ## 仓库结构
 
-- `packages/lingua-core` — 框架无关的领域包：append-only 事件存储（窄写入接口 `recordEvidence`，ADR-0014）、有效观测解析管线、as-of 双模式投影（当时所知 / 当前认知）、SQLite schema v1、时钟端口（含 ID 生成，可注入假时钟）
-- `apps/shell` — 薄壳 CLI（agent loop、渠道、适配器随后续票据加入）
+- `packages/lingua-core` — 框架无关的领域包：append-only 事件存储（窄写入接口 `recordEvidence`，ADR-0014）、有效观测解析管线、as-of 双模式投影（当时所知 / 当前认知）、三段式 digest、角色卡与策展事实、母语支架档位规则、双联系人消息存储、SQLite schema v3、时钟端口（含 ID 生成，可注入假时钟）
+- `apps/shell` — 薄壳：CLI（`init` / `serve`）、Web Chat（node:http + 无构建原生前端）、agent loop（Vercel AI SDK 工具循环，直连无渠道抽象层）、TOML 配置加载、角色卡装配
 - `docs/` — 规格、ADR、研究报告

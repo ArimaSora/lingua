@@ -155,4 +155,13 @@ describe("renderDigest (ADR-0002/0017 三段式)", () => {
     expect(ja.text).toContain("猫をかぶる");
     expect(ja.text).toContain("日本語の事実");
   });
+
+  it("includes the current scaffolding tier in 角色须知 when tier is provided", () => {
+    const { db, clock } = makeHarness();
+    clock.set(T0 + DAY);
+    const digest = renderDigest({ db, clock, language: "en", tier: "on-request" });
+    expect(digest.text).toContain("当前母语支架：on-request");
+    expect(digest.text).toContain("无翻译");
+    expect(digest.text).toContain("仅明确求助时救场");
+  });
 });

@@ -10,3 +10,4 @@ config.local.toml
 !.env.example
 .scratch/
 .DS_Store
+*.tsbuildinfo
