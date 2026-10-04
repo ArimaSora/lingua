@@ -102,11 +102,14 @@ export type { ExplanationLog, ExplanationLogOptions, ExplanationRef } from "./ex
 export { defaultParams, openEventStore } from "./event-store";
 export type {
   Assistance,
+  CorrectObservationInput,
   Evidence,
   EventStore,
   EventStoreOptions,
   EventType,
   FsrsRating,
+  JudgmentChainItem,
+  JudgmentRecord,
   LearningEvent,
   LinguaParams,
   Outcome,

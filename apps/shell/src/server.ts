@@ -36,6 +36,7 @@ import {
   type ContentSimplifier,
   type CoarseGrader,
   type Database,
+  type EventStore,
   type PerishabilityTagger,
   type RssFetcher,
   type RssSubscriptions,
@@ -87,10 +88,13 @@ export type RunningServer = {
   scheduler: Scheduler;
   // 票 10：内容管道入口，供测试/CLI 直接检查分流结果。
   pipeline: ContentPipeline;
+  // 票 09：抽检页直接复用事件存储查询与纠正接口。
+  eventStore: EventStore;
   close(): Promise<void>;
 };
 
 const INDEX_HTML = fileURLToPath(new URL("../public/index.html", import.meta.url));
+const REVIEW_HTML = fileURLToPath(new URL("../public/review.html", import.meta.url));
 const DEFAULT_CARD = fileURLToPath(new URL("../cards/default-companion.json", import.meta.url));
 const DEFAULT_PACK = fileURLToPath(new URL("../packs/en-bootstrap-a1.json", import.meta.url));
 
@@ -164,7 +168,7 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
   migrate(db);
   const clock = new SystemClock();
   // 事件存储初始化会写入默认参数快照——digest 投影依赖它（ticket 03 契约）。
-  openEventStore({ db, clock });
+  const eventStore = openEventStore({ db, clock });
 
   // 角色卡：数据目录 companion.json > 显式路径 > 内置默认卡；幂等加载。
   const card = loadCharacterCard({ db, clock, card: readCard(options.cardPath, dir) });
@@ -318,6 +322,11 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
           res.end(readFileSync(INDEX_HTML));
           return;
         }
+        if (req.method === "GET" && url.pathname === "/review.html") {
+          res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+          res.end(readFileSync(REVIEW_HTML));
+          return;
+        }
         if (req.method === "GET" && url.pathname === "/api/contacts") {
           json(res, 200, contacts);
           return;
@@ -344,6 +353,53 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
             return;
           }
           json(res, 200, openExplanationLog({ db, clock }).forMessage(messageId));
+          return;
+        }
+        // 「角色眼中的你」抽检页（issue #09）：判分记录列表与纠正。
+        if (req.method === "GET" && url.pathname === "/api/judgments") {
+          const filters: { language: string; chunkId?: string; observationId?: string } = { language };
+          const chunkId = url.searchParams.get("chunkId");
+          const observationId = url.searchParams.get("observationId");
+          if (chunkId) filters.chunkId = chunkId;
+          if (observationId) filters.observationId = observationId;
+          json(res, 200, eventStore.listJudgments(filters));
+          return;
+        }
+        if (req.method === "POST" && url.pathname.startsWith("/api/judgments/") && url.pathname.endsWith("/correct")) {
+          const eventId = url.pathname.slice("/api/judgments/".length, -"/correct".length);
+          if (eventId.length === 0) {
+            json(res, 400, { error: "需要 eventId" });
+            return;
+          }
+          const record = eventStore.getJudgment(eventId);
+          if (!record) {
+            json(res, 404, { error: "判分记录不存在" });
+            return;
+          }
+          const body = (await readBody(req)) as {
+            outcome?: unknown;
+            assistance?: unknown;
+            confidence?: unknown;
+            quote?: unknown;
+            reason?: unknown;
+          };
+          if (
+            typeof body.outcome !== "string" ||
+            !["correct", "wrong", "not-produced"].includes(body.outcome)
+          ) {
+            json(res, 400, { error: "outcome 需为 correct | wrong | not-produced" });
+            return;
+          }
+          const correction = eventStore.correctObservation({
+            observationId: record.observationId,
+            chunkId: record.chunkId,
+            outcome: body.outcome as "correct" | "wrong" | "not-produced",
+            ...(typeof body.assistance === "string" ? { assistance: body.assistance as "none" | "assisted" } : {}),
+            ...(typeof body.confidence === "number" ? { confidence: body.confidence } : {}),
+            ...(typeof body.quote === "string" ? { quote: body.quote } : {}),
+            ...(typeof body.reason === "string" ? { reason: body.reason } : {}),
+          });
+          json(res, 200, correction);
           return;
         }
         if (req.method === "POST" && url.pathname === "/api/messages") {
@@ -420,6 +476,7 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
     card,
     scheduler,
     pipeline,
+    eventStore,
     close: () =>
       new Promise<void>((resolveClose, rejectClose) => {
         clearInterval(tickTimer);

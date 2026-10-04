@@ -313,6 +313,51 @@ try {
     assert.equal(refs[0].layer, 1);
   });
 
+  await check("抽检页：判分记录列表与纠正端点可访问且状态重算（issue #09）", async () => {
+    // 页面全链路：入口链接 → 抽检页可服务 → API 列表 → 纠错 → 链条与有效版本。
+    const indexHtml = await fetch(`${api}/`).then((r) => r.text());
+    assert.match(indexHtml, /href="\/review\.html"/, "聊天页应挂抽检页入口");
+    const reviewHtml = await fetch(`${api}/review.html`).then((r) => r.text());
+    assert.match(reviewHtml, /判分抽检/);
+    assert.match(reviewHtml, /置信度/, "列表应渲染置信度列");
+    assert.match(reviewHtml, /correct/, "列表应提供纠正操作");
+    server!.db.prepare(
+      `INSERT INTO chunks (id, user_id, language, canonical_form, chunk_type, cefr, variants, source_content_id, status, created_at)
+       VALUES (?, 'local', 'en', 'smoke chunk', 'collocation', 'A1', '[]', NULL, 'enrolled', ?)`,
+    ).run("smoke-chunk", Date.now());
+    const obsId = "smoke-obs-1";
+    server!.eventStore.recordEvidence({
+      observationId: obsId,
+      chunkId: "smoke-chunk",
+      assistance: "none",
+      outcome: "correct",
+      confidence: 0.95,
+      quote: "I smoke it",
+      occurredAt: Date.now() - 24 * 60 * 60 * 1000,
+    });
+
+    const records = await getJson(`${api}/api/judgments`);
+    const record = records.find((r: { observationId: string }) => r.observationId === obsId);
+    assert.ok(record, "判分记录列表应包含刚才的判分");
+    assert.equal(record.eventType, "independent-production");
+
+    await postJson(`${api}/api/judgments/${record.eventId}/correct`, {
+      outcome: "wrong",
+      reason: "smoke 测试纠正",
+    });
+
+    const after = await getJson(`${api}/api/judgments`);
+    const corrected = after.find((r: { observationId: string }) => r.observationId === obsId);
+    assert.ok(corrected, "纠正后该观测仍应存在有效版本");
+    assert.equal(corrected.eventType, "independent-attempt-failed");
+    // ADR-0014：事件流即审计链——链条 = 替代版本 + 撤销（含理由）+ 原记录。
+    assert.equal(corrected.chain.length, 3, "依据链应包含原记录、撤销与替代版本");
+    const voidItem = corrected.chain.find((c: { eventType: string }) => c.eventType === "void");
+    assert.ok(voidItem, "依据链应包含撤销事件");
+    assert.equal(voidItem.voidsEventId, record.eventId, "撤销应指向原记录");
+    assert.equal(voidItem.voidReason, "smoke 测试纠正");
+  });
+
   await check("页面渲染语域标注（带 register 类名的 span）", async () => {
     const html = await fetch(`${api}/`).then((r) => r.text());
     assert.match(html, /register-formal/);
