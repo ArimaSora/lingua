@@ -1,16 +1,22 @@
 import { generateText, type LanguageModel } from "ai";
+import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import {
   buildJudgePrompt,
+  createFallbackUsageJudge,
+  createJevUsageJudge,
   createJudge,
   type Ambush,
   type Clock,
   type Database,
   type EventStore,
   type Judge,
+  type JudgeModelConfig,
+  type JudgeSelection,
   type MessageStore,
   type UsageJudge,
   type UsageVerdict,
 } from "@lingua/core";
+import { createJevHttpTransport } from "./jev-transport";
 
 // 埋伏复习运行时接线（issue #07 壳层侧，ADR-0017 真接缝）：
 // - 每轮对话确保有开放话题（有料才起，core 记配额），把话题生成提示注入
@@ -117,6 +123,40 @@ export function createAmbushLoop(deps: AmbushLoopDeps): AmbushLoop {
   };
 }
 
-export function createDefaultJudge(db: Database, model: LanguageModel): Judge {
-  return createJudge({ db, usageJudge: createLlmUsageJudge(model) });
+function judgeModelToLanguageModel(config: JudgeModelConfig): LanguageModel {
+  return createOpenAICompatible({
+    name: config.provider,
+    baseURL: config.baseUrl,
+    apiKey: config.apiKey,
+  }).chatModel(config.model);
+}
+
+// 判分装配（issue #17，ADR-0010）：按配置选择判分通道——缺省 / llm = LLM 判用法
+// （OpenAI 兼容）；jev = Jev 主判分 + LLM 降级（Jev 非 2xx / 超时 / 响应不可解析
+// 时落到 fallback，保住判分通道）。options.judge 注入优先级高于此处（冒烟不受影响）。
+export function createDefaultJudge(
+  db: Database,
+  model: LanguageModel,
+  selection?: JudgeSelection,
+): Judge {
+  if (!selection || selection.kind === "llm") {
+    const llmModel = selection ? judgeModelToLanguageModel(selection.judge) : model;
+    return createJudge({ db, usageJudge: createLlmUsageJudge(llmModel) });
+  }
+  const fallback = createLlmUsageJudge(judgeModelToLanguageModel(selection.fallback));
+  const jev = createJevUsageJudge({
+    transport: createJevHttpTransport({
+      apiKey: selection.apiKey,
+      endpoint: selection.endpoint,
+    }),
+    model: selection.model,
+  });
+  const usageJudge: UsageJudge = createFallbackUsageJudge({
+    primary: jev,
+    fallback,
+    onFallback: (error) => {
+      console.warn(`Jev 判分失败，降级到 LLM：${(error as Error).message}`);
+    },
+  });
+  return createJudge({ db, usageJudge });
 }

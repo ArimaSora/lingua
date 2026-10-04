@@ -49,7 +49,7 @@ import { createCompanionAgent, type CompanionAgent } from "./agent";
 import { createAmbushLoop, createDefaultJudge } from "./ambush-loop";
 import { createRetellLoop } from "./retell-loop";
 import { createReadabilityExtractor } from "./content-extractor";
-import { loadConfig, resolveHome } from "./config";
+import { loadConfig, loadJudgeSelection, resolveHome } from "./config";
 import { dataDir } from "./data-dir";
 import { createMainSimplifier } from "./simplifier";
 import {
@@ -239,9 +239,11 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
   // 知识条目库（issue #12）：随包种子内容，启动时加载并全量校验。
   const knowledge = openKnowledgeStore({ entries: loadKnowledgeEntries() });
   // 埋伏复习运行时接线（issue #07 壳层侧）：每轮确保开放话题并注入角色
-  // prompt；用户回合后判分结算。判分器缺省 = 规则命中 + LLM 判用法（ADR-0010）。
+  // prompt；用户回合后判分结算。判分器缺省按配置装配（ADR-0010：jev 主 +
+  // llm 降级 / 纯 llm，issue #17）；options.judge 注入优先级最高（e2e 假判分器）。
   const ambush = openAmbush({ db, clock });
-  const judge = options.judge ?? createDefaultJudge(db, model);
+  const judgeSelection = options.model ? undefined : loadJudgeSelection(options.configPath);
+  const judge = options.judge ?? createDefaultJudge(db, model, judgeSelection);
   const ambushLoop = createAmbushLoop({ db, clock, language, ambush, eventStore, store, judge });
   // 角色转述接线（issue #19）：每轮取一条待投递转述任务注入角色 prompt。
   const retellLoop = createRetellLoop({ pipeline });
