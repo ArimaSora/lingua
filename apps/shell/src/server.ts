@@ -5,6 +5,9 @@ import { fileURLToPath } from "node:url";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import type { LanguageModel } from "ai";
 import {
+  ensureLearnerProfile,
+  formatScaffoldingSuggestion,
+  getPendingSuggestion,
   loadCharacterCard,
   loadKnowledgeEntries,
   migrate,
@@ -19,6 +22,7 @@ import {
   openScheduler,
   parseBootstrapPack,
   parseRssFeed,
+  proposeScaffoldingTier,
   runBackup,
   SystemClock,
   type CharacterCard,
@@ -160,6 +164,8 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
   // 角色卡：数据目录 companion.json > 显式路径 > 内置默认卡；幂等加载。
   const card = loadCharacterCard({ db, clock, card: readCard(options.cardPath, dir) });
   const language = card.languagePair.target;
+  // 学习者档案初始化（issue #13）：以角色卡档位为默认值，不覆盖既有手动设置。
+  ensureLearnerProfile({ db, clock, language, cardTier: card.scaffoldingTier });
   const store = openMessageStore({ db, clock });
 
   // 系统会话播种欢迎文案（仅首次）。
@@ -318,10 +324,12 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
           }
           if (body.contact === "system") {
             store.append({ language, contact: "system", role: "user", text: body.text.trim() });
-            let replyText: string;
+            let systemResult: ReturnType<typeof handleSystemMessage>;
             try {
-              replyText = handleSystemMessage({
+              systemResult = handleSystemMessage({
                 text: body.text.trim(),
+                db,
+                clock,
                 bootstrap,
                 pipeline,
                 language,
@@ -330,7 +338,7 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
             } catch (error) {
               if (error instanceof SystemUrlIntentError) {
                 const result = await pipeline.ingest({ url: error.url });
-                replyText = formatIngestReply(result);
+                systemResult = { reply: formatIngestReply(result), skipSuggestion: false };
               } else {
                 throw error;
               }
@@ -339,8 +347,20 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
               language,
               contact: "system",
               role: "assistant",
-              text: replyText,
+              text: systemResult.reply,
             });
+            // 系统依据事件流提出建议，以消息形式出现；未经确认不改变行为。
+            if (!systemResult.skipSuggestion && !getPendingSuggestion({ db, language })) {
+              const suggestion = proposeScaffoldingTier({ db, clock, language });
+              if (suggestion) {
+                store.append({
+                  language,
+                  contact: "system",
+                  role: "assistant",
+                  text: formatScaffoldingSuggestion(suggestion),
+                });
+              }
+            }
             json(res, 200, reply);
             return;
           }

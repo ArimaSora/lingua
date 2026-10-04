@@ -1,10 +1,13 @@
 import type { Clock } from "./clock";
 import type { Database } from "./database";
 import { projectState } from "./projection";
+import type { ScaffoldingTier } from "./scaffolding";
+import { scaffoldingPolicyDescription, SCAFFOLDING_TIER_LABELS } from "./scaffolding";
 
 // 摘要（Digest）：注入对话 prompt 的唯一状态形式（ADR-0002），
 // 选料 + token 预算 + 渲染收拢在本模块，对外只有 renderDigest（ADR-0017）。
 // 三段：埋伏目标（到期语块）/ 近期弱点（PFA 最低技能点）/ 角色须知（策展事实）。
+// issue #13：角色须知段联动当前母语支架档位。
 
 // ADR-0002：≤300 token。
 export const DIGEST_TOKEN_BUDGET = 300;
@@ -13,6 +16,8 @@ export type DigestOptions = {
   db: Database;
   clock: Clock;
   language: string;
+  // 传入档位后 digest 会包含当前支架策略，供模型即时跟随。
+  tier?: ScaffoldingTier;
 };
 
 export type Digest = {
@@ -94,6 +99,12 @@ export function renderDigest(options: DigestOptions): Digest {
       )
       .all(language, MAX_FACTS) as unknown as { fact: string }[]
   ).map((row) => `- ${row.fact}`);
+
+  if (options.tier !== undefined) {
+    facts.unshift(
+      `- 当前母语支架：${options.tier}（${SCAFFOLDING_TIER_LABELS[options.tier]}；${scaffoldingPolicyDescription(options.tier)}）`,
+    );
+  }
 
   // 预算截断（确定性）：段落优先级 埋伏目标 > 近期弱点 > 角色须知；
   // 超预算时从最低优先级段的段尾整行丢弃。
