@@ -14,6 +14,8 @@ export {
 export type { Admission, AdmissionOptions, AdmissionPeriod, QuotaAccount } from "./admission";
 export {
   AMBUSH_REPEAT_WINDOW_MS,
+  firstHelpRequestIndex,
+  HELP_REQUEST_RES,
   MAX_AMBUSH_CHUNKS,
   MAX_BURIALS_IN_WINDOW,
   MAX_TOPICS_PER_DAY,
