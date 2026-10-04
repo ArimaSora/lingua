@@ -120,6 +120,25 @@ export { openExplanationLog } from "./explanation-log";
 export type { ExplanationLog, ExplanationLogOptions, ExplanationRef } from "./explanation-log";
 export { defaultParams, openEventStore } from "./event-store";
 export { buildJudgePrompt, createJudge } from "./judge";
+export {
+  DEFAULT_JEV_ENDPOINT,
+  DEFAULT_JEV_MODEL,
+  JEV_USAGE_QUESTION_ID,
+  buildJevUsageRequest,
+  createFallbackUsageJudge,
+  createJevUsageJudge,
+  parseJevUsageVerdict,
+  parseJudgeSelection,
+} from "./jev-judge";
+export type {
+  FallbackUsageJudgeOptions,
+  JevNoulQuestion,
+  JevSystemOneRequest,
+  JevTransport,
+  JevUsageJudgeOptions,
+  JudgeModelConfig,
+  JudgeSelection,
+} from "./jev-judge";
 export type {
   Assistance,
   CorrectObservationInput,
