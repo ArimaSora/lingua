@@ -2,7 +2,8 @@ import { DatabaseSync } from "node:sqlite";
 import { FakeClock, migrate, openDatabase, openEventStore } from "../src/index";
 
 export const T0 = Date.UTC(2026, 0, 1, 9, 0, 0);
-export const HOUR = 60 * 60 * 1000;
+export const MINUTE = 60 * 1000;
+export const HOUR = 60 * MINUTE;
 export const DAY = 24 * HOUR;
 
 export function makeHarness(start: number = T0) {

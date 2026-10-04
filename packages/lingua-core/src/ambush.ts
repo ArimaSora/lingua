@@ -1,13 +1,15 @@
 import type { Clock } from "./clock";
 import type { Database } from "./database";
 import type { EventStore } from "./event-store";
+import { recordErrorLog } from "./error-log";
 import type { Judge, JudgeRequest, JudgeVerdict } from "./judge";
 import { projectState } from "./projection";
 import { recordMetric, AMBUSH_HIT_METRIC, TOPIC_RESPONSE_METRIC } from "./metrics";
 
-// 埋伏式复习调度（issue #7，mvp.md 双联系人与主动性）：
+// 埋伏式复习调度（issue #7/#8，mvp.md 双联系人与主动性）：
 // - 候选池 = 到期语块 + 订阅新内容（v1 先实现到期语块），事件驱动有料才起；
 // - 每话题埋 2–4 个到期语块，同语块 48h 内最多埋 2 次，未命中回炉重排；
+// - 判分闭环同时写入错误日志（issue #8），供系统小结消费；
 // - 不泄题硬规则（ADR-0013）：话题生成提示不得包含目标语块形式或直译。
 
 export const STALE_TOPIC_MS = 24 * 60 * 60 * 1000;
@@ -357,6 +359,25 @@ export function openAmbush(options: AmbushOptions): Ambush {
           quote: verdict.quote,
           topicId,
           judge: { name: judge.name, version: judge.version },
+        });
+      }
+
+      // 语法/用法错误写入独立错误日志，与学习者状态解耦（issue #8）。
+      if (verdict.outcome === "wrong") {
+        const chunk = getChunk.get(placement.chunk_id, userId) as ChunkRow | undefined;
+        const canonicalForm = chunk?.canonical_form ?? placement.chunk_id;
+        recordErrorLog({
+          db,
+          clock,
+          userId,
+          language: topic.language,
+          topicId,
+          chunkId: placement.chunk_id,
+          originalText: userText,
+          quote: verdict.quote,
+          errorType: "usage",
+          phenomenon: `你用了 "${verdict.quote}"，这个表达里有个地方不太对，能发现吗？`,
+          correction: `正确说法：${canonicalForm}。`,
         });
       }
 
