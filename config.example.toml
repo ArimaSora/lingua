@@ -1,4 +1,6 @@
 # Lingua 配置示例。复制为 config.toml 并填写密钥；config.toml 已在 .gitignore 中，永不入库。
+# api_key 可留空：应用照常启动（角色对话/讲解暂不可用），启动后在系统会话
+# 发送「设置密钥 <key>」即刻生效，或编辑本文件后重启。
 # 数据（SQLite、学习日志）默认存放于仓库外的 ~/.lingua/。
 # 本文件含密钥：权限应为 0600（仅本人可读写）；lingua init 生成的配置会自动检查权限。
 # 任何日志/设置界面输出须经 redactConfig 脱敏，密钥永不回显。
@@ -15,10 +17,19 @@ api_key = ""
 base_url = "https://api.deepseek.com/v1"
 
 # 判分器：Jev（TypeSafe System One，主）；Qwen-flash 级（降级路径）
+# provider = "jev"：Jev 决策模型（非 chat/completions，单独适配器，issue #17）。
+#   api_key 必填（console.typesafe.ai 申请）；base_url / model 可省（默认
+#   https://api.typesafe.ai/v1/systemone / jev-latest；OpenRouter 镜像填
+#   https://openrouter.ai/api/alpha/decisions + typesafe/jev-1.13）。
+# provider 为其他值（如 "qwen"）：OpenAI 兼容 LLM 判分，四个字段都必填。
+# 整段缺省 = 主模型兼任 LLM 判分（Jev 需单独 early-access key，不静默默认）。
 [models.judge]
 provider = "jev"
 api_key = ""
+# base_url = "https://api.typesafe.ai/v1/systemone"
+# model = "jev-latest"
 
+# Jev 降级的 LLM 判分（judge = jev 时生效；缺省 = 主模型兼任）
 [models.judge_fallback]
 provider = "qwen"
 model = "qwen-flash"

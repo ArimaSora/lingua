@@ -31,6 +31,9 @@ export type MessageStore = {
   }): ChatMessage;
   // 时间正序；limit 取最近 N 条（仍正序返回）。
   list(options: { language: string; contact: ChatContact; limit?: number }): ChatMessage[];
+  // 改写一条已存消息的文本——运行时密钥注入（设置密钥命令）后对用户消息
+  // 脱敏，密钥永不留在聊天历史里。
+  redact(messageId: string, text: string): void;
 };
 
 export type MessageStoreOptions = {
@@ -124,6 +127,14 @@ export function openMessageStore(options: MessageStoreOptions): MessageStore {
               .all(language, contact, limit)
       ) as unknown as MessageRow[];
       return rows.map(rowToMessage);
+    },
+    redact(messageId, text) {
+      const result = db
+        .prepare("UPDATE messages SET text = ? WHERE id = ?")
+        .run(text, messageId);
+      if (Number(result.changes) === 0) {
+        throw new Error(`unknown message: ${messageId}`);
+      }
     },
   };
 }

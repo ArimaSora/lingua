@@ -59,6 +59,10 @@ function isListSubscriptionsIntent(text: string): boolean {
   return /列出订阅|订阅列表/.test(text);
 }
 
+// 运行时密钥注入（零配置启动）：「设置密钥 <key>」即刻生效（无需重启）。
+// 密钥不回显：回复与聊天历史均经 SECRET_MASK 脱敏（调用方负责改写历史消息）。
+export const SET_API_KEY_RE = /^(?:设置密钥|set api key)\s+(\S+)$/i;
+
 function addSubscriptionReply(rss: RssSubscriptions, text: string): string {
   const url = findUrl(text);
   if (!url) return "请提供要订阅的 RSS/播客链接，例如：订阅 https://example.com/feed.xml";
@@ -119,8 +123,24 @@ export function handleSystemMessage(input: {
   pipeline: ContentPipeline;
   language: string;
   rss?: RssSubscriptions;
+  // 运行时密钥注入：应用并持久化密钥，返回写入位置的说明（不含密钥本身）；
+  // 未注入时（e2e 假模型路径）返回 null 表示该命令不可用。
+  onSetApiKey?: (apiKey: string) => string | null;
 }): SystemMessageResult {
   const { db, clock, language } = input;
+
+  const keyMatch = SET_API_KEY_RE.exec(input.text.trim());
+  if (keyMatch) {
+    if (!input.onSetApiKey) {
+      return { reply: "当前运行模式不接受运行时密钥（注入模型）。", skipSuggestion: true };
+    }
+    const where = input.onSetApiKey(keyMatch[1]!);
+    return {
+      reply: `已保存主模型密钥并即刻生效（${where}）。密钥已脱敏，任何界面与历史都不回显。`,
+      skipSuggestion: true,
+    };
+  }
+
   const commandTier = parseScaffoldingCommand(input.text);
   if (commandTier) {
     setScaffoldingTier({ db, clock, language, tier: commandTier });
@@ -214,8 +234,8 @@ export function formatIngestReply(result: Awaited<ReturnType<ContentPipeline["in
   if (result.kind === "unlock_queued") {
     return `已收入解锁队列，${result.unlockLabel}。等你的水平到位后会主动推送。`;
   }
-  if (result.kind === "dismissed") {
-    return `这篇时效性内容太难，改写又没成功，按规则不进解锁队列，先搁置。原文链接：${result.original.sourceUrl}`;
+  if (result.kind === "retell") {
+    return `这篇时效性内容太难，改写未成功，已转给好友角色——他会找你用大白话聊这篇文章的要点。原文链接：${result.original.sourceUrl}`;
   }
   return `已收到链接，难度约 ${result.level}，可直接阅读。`;
 }

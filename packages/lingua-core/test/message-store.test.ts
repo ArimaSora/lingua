@@ -55,3 +55,23 @@ describe("openMessageStore（双联系人消息持久化，issue #5）", () => {
     expect(recent.map((message) => message.text)).toEqual(["msg 3", "msg 4"]);
   });
 });
+
+describe("redact：改写已存消息文本（运行时密钥脱敏）", () => {
+  it("改写字幕后读回为新文本；未知消息 id 抛错", () => {
+    const { db, clock } = makeHarness();
+    const store = openMessageStore({ db, clock });
+    const message = store.append({
+      language: "en",
+      contact: "system",
+      role: "user",
+      text: "设置密钥 sk-secret-123",
+    });
+
+    store.redact(message.id, "设置密钥 ********");
+    const listed = store.list({ language: "en", contact: "system" });
+    expect(listed[0]!.text).toBe("设置密钥 ********");
+    expect(JSON.stringify(listed)).not.toContain("sk-secret-123");
+
+    expect(() => store.redact("no-such-id", "x")).toThrow(/unknown message/);
+  });
+});

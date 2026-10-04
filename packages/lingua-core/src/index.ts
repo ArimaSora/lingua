@@ -14,6 +14,8 @@ export {
 export type { Admission, AdmissionOptions, AdmissionPeriod, QuotaAccount } from "./admission";
 export {
   AMBUSH_REPEAT_WINDOW_MS,
+  firstHelpRequestIndex,
+  HELP_REQUEST_RES,
   MAX_AMBUSH_CHUNKS,
   MAX_BURIALS_IN_WINDOW,
   MAX_TOPICS_PER_DAY,
@@ -86,7 +88,7 @@ export { FakeClock, SystemClock } from "./clock";
 export type { Clock } from "./clock";
 export { checkConfigPermissions, redactConfig, SECRET_MASK } from "./config-hardening";
 export type { ConfigPermissionReport, ConfigPermissionStatus } from "./config-hardening";
-export { openContentPipeline } from "./content-pipeline";
+export { buildRetellPrompt, openContentPipeline } from "./content-pipeline";
 export type {
   ContentExtractor,
   ContentPipeline,
@@ -94,6 +96,7 @@ export type {
   ContentSimplifier,
   IngestProvidedInput,
   IngestResult,
+  RetellTask,
 } from "./content-pipeline";
 export { MIGRATION_VERSIONS, migrate, openDatabase, SCHEMA_VERSION } from "./database";
 export type { Database } from "./database";
@@ -117,6 +120,25 @@ export { openExplanationLog } from "./explanation-log";
 export type { ExplanationLog, ExplanationLogOptions, ExplanationRef } from "./explanation-log";
 export { defaultParams, openEventStore } from "./event-store";
 export { buildJudgePrompt, createJudge } from "./judge";
+export {
+  DEFAULT_JEV_ENDPOINT,
+  DEFAULT_JEV_MODEL,
+  JEV_USAGE_QUESTION_ID,
+  buildJevUsageRequest,
+  createFallbackUsageJudge,
+  createJevUsageJudge,
+  parseJevUsageVerdict,
+  parseJudgeSelection,
+} from "./jev-judge";
+export type {
+  FallbackUsageJudgeOptions,
+  JevNoulQuestion,
+  JevSystemOneRequest,
+  JevTransport,
+  JevUsageJudgeOptions,
+  JudgeModelConfig,
+  JudgeSelection,
+} from "./jev-judge";
 export type {
   Assistance,
   CorrectObservationInput,
@@ -168,7 +190,13 @@ export type {
   UsageJudgeInput,
   UsageVerdict,
 } from "./judge";
-export { AMBUSH_HIT_METRIC, APP_OPEN_METRIC, recordMetric, TOPIC_RESPONSE_METRIC } from "./metrics";
+export {
+  AMBUSH_HIT_METRIC,
+  APP_OPEN_METRIC,
+  recordMetric,
+  RETELLING_METRIC,
+  TOPIC_RESPONSE_METRIC,
+} from "./metrics";
 export type { MetricInput, MetricName } from "./metrics";
 export { queryMetricsPanel } from "./metrics-panel";
 export type {

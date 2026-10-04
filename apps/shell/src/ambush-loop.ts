@@ -1,16 +1,24 @@
-import { generateText, type LanguageModel } from "ai";
+import { generateText } from "ai";
+import type { LanguageModel } from "ai";
+import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import {
   buildJudgePrompt,
+  createFallbackUsageJudge,
+  createJevUsageJudge,
   createJudge,
   type Ambush,
   type Clock,
   type Database,
   type EventStore,
   type Judge,
+  type JudgeModelConfig,
+  type JudgeSelection,
   type MessageStore,
   type UsageJudge,
   type UsageVerdict,
 } from "@lingua/core";
+import { createJevHttpTransport } from "./jev-transport";
+import type { ModelSource } from "./model-registry";
 
 // 埋伏复习运行时接线（issue #07 壳层侧，ADR-0017 真接缝）：
 // - 每轮对话确保有开放话题（有料才起，core 记配额），把话题生成提示注入
@@ -19,13 +27,13 @@ import {
 //   （ADR-0010，Jev/任意 OpenAI 兼容模型；e2e 注入假判分器）；
 // - 近期是否暴露由核心按近期角色消息确定性判定（ADR-0013），壳层只搬运文本。
 
-export function createLlmUsageJudge(model: LanguageModel): UsageJudge {
+export function createLlmUsageJudge(source: ModelSource): UsageJudge {
   return {
     name: "llm-usage",
     version: "1",
     async judgeUsage(input): Promise<UsageVerdict> {
       const result = await generateText({
-        model,
+        model: source.get(),
         prompt: buildJudgePrompt(input),
         maxOutputTokens: 200,
       });
@@ -117,6 +125,60 @@ export function createAmbushLoop(deps: AmbushLoopDeps): AmbushLoop {
   };
 }
 
-export function createDefaultJudge(db: Database, model: LanguageModel): Judge {
-  return createJudge({ db, usageJudge: createLlmUsageJudge(model) });
+function judgeModelToLanguageModel(config: JudgeModelConfig): LanguageModel {
+  return createOpenAICompatible({
+    name: config.provider,
+    baseURL: config.baseUrl,
+    apiKey: config.apiKey,
+  }).chatModel(config.model);
+}
+
+// 判分装配（issue #17，ADR-0010）：按配置选择判分通道——无 selection / llm =
+// LLM 判用法（OpenAI 兼容）；jev = Jev 主判分 + LLM 降级（Jev 非 2xx / 超时 /
+// 响应不可解析时落到 fallback，保住判分通道）。options.judge 注入优先级高于
+// 此处（冒烟不受影响）。
+export function createConfiguredJudge(
+  db: Database,
+  source: ModelSource,
+  selection?: JudgeSelection,
+): Judge {
+  if (!selection) {
+    // 主模型兼任：经 ModelSource 取（零配置启动后可运行时填入密钥）。
+    return createJudge({ db, usageJudge: createLlmUsageJudge(source) });
+  }
+  if (selection.kind === "llm") {
+    // 独立的 OpenAI 兼容判分模型（配置自带密钥）：固定模型源。
+    return createJudge({
+      db,
+      usageJudge: createLlmUsageJudge({
+        get: () => judgeModelToLanguageModel(selection.judge),
+        configured: () => true,
+        setApiKey() {
+          /* 判分模型的密钥来自配置文件，不接受运行时换钥 */
+        },
+      }),
+    });
+  }
+  const fallback = createLlmUsageJudge({
+    get: () => judgeModelToLanguageModel(selection.fallback),
+    configured: () => true,
+    setApiKey() {
+      /* 降级判分模型的密钥来自配置文件，不接受运行时换钥 */
+    },
+  });
+  const jev = createJevUsageJudge({
+    transport: createJevHttpTransport({
+      apiKey: selection.apiKey,
+      endpoint: selection.endpoint,
+    }),
+    model: selection.model,
+  });
+  const usageJudge: UsageJudge = createFallbackUsageJudge({
+    primary: jev,
+    fallback,
+    onFallback: (error) => {
+      console.warn(`Jev 判分失败，降级到 LLM：${(error as Error).message}`);
+    },
+  });
+  return createJudge({ db, usageJudge });
 }

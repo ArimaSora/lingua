@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { MockLanguageModelV4 } from "ai/test";
@@ -30,10 +30,14 @@ const fakeExtractor = async (url: string) => {
   if (url.includes("/essays/")) return { title: "Hard Essay", body: HARD_BODY };
   return { title: "Easy Article", body: EASY_BODY };
 };
-const fakeSimplifier = async ({ body, url }: { body: string; url: string }) => ({
-  title: "简化版",
-  body: `[简化版] ${body}\n原文链接：${url}`,
-});
+const fakeSimplifier = async ({ body, url }: { body: string; url: string }) => {
+  // issue #19：/broken/ 路径模拟改写失败，触发角色转述出路。
+  if (url.includes("/broken/")) throw new Error("smoke: 改写服务不可用");
+  return {
+    title: "简化版",
+    body: `[简化版] ${body}\n原文链接：${url}`,
+  };
+};
 
 let callCount = 0;
 const fakeModel = new MockLanguageModelV4({
@@ -599,6 +603,34 @@ try {
     assert.equal(systemFinal.length, systemAfter.length, "重复 tick 不重复投递小结");
   });
 
+  await check("角色转述：改写失败的易腐难文转给好友角色聊要点（issue #19）", async () => {
+    const callsBefore = callCount;
+    // 系统入口：改写失败 → 系统文案告知转述去向，原文不进解锁队列。
+    const reply = await postJson(`${api}/api/messages`, {
+      contact: "system",
+      text: "https://news.example.com/2026/10/broken/agent-release",
+    });
+    assert.equal(reply.role, "assistant");
+    assert.match(reply.text, /已转给好友角色/);
+    assert.equal(callCount, callsBefore, "转述任务入队不经过模型");
+
+    // 转述任务待投递；下一角色回合注入转述提示并标记投递。
+    assert.equal(server!.pipeline.pendingRetells().length, 1, "应有一条待投递转述任务");
+    await postJson(`${api}/api/messages`, { contact: "companion", text: "anything interesting today?" });
+    assert.match(
+      systemsSeen[systemsSeen.length - 1]!,
+      /Article to naturally bring up and retell in plain words/,
+      "转述提示应注入角色 system prompt",
+    );
+    assert.match(systemsSeen[systemsSeen.length - 1]!, /agent-release/, "转述提示应带原文链接");
+    assert.equal(server!.pipeline.pendingRetells().length, 0, "注入后任务应出队");
+
+    const retellings = server!.db
+      .prepare("SELECT COUNT(*) AS n FROM metric_events WHERE metric_name = 'retelling-delivered'")
+      .get() as { n: number };
+    assert.equal(retellings.n, 1, "投递应记一条 retelling-delivered 埋点");
+  });
+
   await check("持久化跨重启：重开服务后消息仍在", async () => {
     const first = server!;
     await first.close();
@@ -612,7 +644,7 @@ try {
     server = reopened;
     try {
       const messages = await getJson(`${base(reopened.port)}/api/messages?contact=companion`);
-      assert.equal(messages.length, 16, "八轮对话的消息应全部保留（含埋伏复习四轮，issue #07）");
+      assert.equal(messages.length, 18, "九轮对话的消息应全部保留（含埋伏复习四轮与角色转述一轮，issue #07/#19）");
       assert.equal(messages[1].translation, REPLY_TRANSLATION);
       const refs = await getJson(
         `${base(reopened.port)}/api/explanations?messageId=${explanationMessageId}`,
@@ -621,8 +653,8 @@ try {
       const system = await getJson(`${base(reopened.port)}/api/messages?contact=system`);
       assert.equal(
         system.length,
-        15,
-        "系统会话不重复播种欢迎文案，课包不重复推送，链接、调档、示范与系统小结历史保留",
+        17,
+        "系统会话不重复播种欢迎文案，课包不重复推送，链接、调档、示范、转述与系统小结历史保留",
       );
       assert.match(system[14]!.text, /【系统小结】/, "小结随库保留");
       // 重启后 tick：第二课仍待预学完成，不推新课；备份按间隔节流。
@@ -640,6 +672,59 @@ try {
     } finally {
       await reopened.close();
       server = undefined;
+    }
+  });
+
+  await check("零配置启动：无密钥可启动，系统会话补钥即刻生效", async () => {
+    const dir2 = mkdtempSync(join(tmpdir(), "lingua-smoke-nokey-"));
+    const prevConfig = process.env.LINGUA_CONFIG;
+    // 指向不存在路径 → loadConfig 落默认值，与宿主机器是否已有配置无关。
+    const configPath = join(dir2, "config.toml");
+    process.env.LINGUA_CONFIG = configPath;
+    const bare = await startServer({
+      dataDir: dir2,
+      port: 0,
+      rssFetcher: async () => "<?xml version=\"1.0\"?><rss></rss>",
+    });
+    try {
+      const api2 = base(bare.port);
+      // 启动即成功；系统会话含补钥指引。
+      const system = await getJson(`${api2}/api/messages?contact=system`);
+      assert.ok(
+        system.some((m: { text: string }) => /模型密钥未配置/.test(m.text)),
+        "未配置时应提示补钥指引",
+      );
+      // 角色对话给出友好报错而不是启动崩溃。
+      const res = await fetch(`${api2}/api/messages`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ contact: "companion", text: "hi" }),
+      });
+      assert.equal(res.status, 500);
+      const err = await res.json();
+      assert.match(err.error, /设置密钥/, "报错应指引补钥路径");
+
+      // 系统会话补钥：确认回复不回显密钥；历史消息脱敏；密钥持久化落盘。
+      const reply = await postJson(`${api2}/api/messages`, {
+        contact: "system",
+        text: "设置密钥 sk-smoke-secret-999",
+      });
+      assert.match(reply.text, /已保存主模型密钥/);
+      assert.doesNotMatch(reply.text, /sk-smoke-secret-999/, "回复不得回显密钥");
+      const after = await getJson(`${api2}/api/messages?contact=system`);
+      const keyMsg = after.find(
+        (m: { role: string; text: string }) => m.role === "user" && m.text.includes("设置密钥"),
+      );
+      assert.ok(keyMsg, "应存在设置密钥的用户消息");
+      assert.doesNotMatch(keyMsg.text, /sk-smoke-secret-999/, "聊天历史必须脱敏");
+      assert.match(keyMsg.text, /\*{8}/, "脱敏为 SECRET_MASK");
+      const saved = readFileSync(configPath, "utf8");
+      assert.match(saved, /sk-smoke-secret-999/, "密钥应持久化到配置文件");
+    } finally {
+      await bare.close();
+      if (prevConfig === undefined) delete process.env.LINGUA_CONFIG;
+      else process.env.LINGUA_CONFIG = prevConfig;
+      rmSync(dir2, { recursive: true, force: true, maxRetries: 5, retryDelay: 300 });
     }
   });
 

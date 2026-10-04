@@ -1,13 +1,14 @@
 import { generateText } from "ai";
-import type { LanguageModel } from "ai";
 import type { Cefr } from "@lingua/core";
 import type { ContentSimplifier } from "@lingua/core";
+import type { ModelSource } from "./model-registry";
 
 // LLM 改写适配器（issue #10）：把易腐难文改写到目标 CEFR 级别，
-// 保留核心信息并标注「简化版」+ 原文链接。无 key 或模型失败时抛错，
-// 由 content-pipeline 捕获并降级为解锁队列。
+// 保留核心信息并标注「简化版」+ 原文链接。模型经 ModelSource 每次调用
+// 取当前实例（未配置密钥时抛错）；无 key 或模型失败时抛错，
+// 由 content-pipeline 捕获并降级为解锁队列/角色转述。
 
-export function createMainSimplifier(model: LanguageModel): ContentSimplifier {
+export function createMainSimplifier(source: ModelSource): ContentSimplifier {
   return async ({ title, body, url, targetLevel }) => {
     const prompt = [
       `Rewrite the following article so it is readable at CEFR ${targetLevel} for a Chinese speaker learning English.`,
@@ -21,7 +22,7 @@ export function createMainSimplifier(model: LanguageModel): ContentSimplifier {
       `URL: ${url}`,
     ].join("\n");
 
-    const result = await generateText({ model, system: prompt, messages: [] });
+    const result = await generateText({ model: source.get(), system: prompt, messages: [] });
     const lines = result.text.trim().split("\n");
     const simplifiedTitle = lines[0] ?? `${title ?? "Article"}（简化版）`;
     const simplifiedBody = lines.slice(1).join("\n").trim();

@@ -9,10 +9,13 @@ import {
   type PerishabilityTagger,
   type Wordlist,
 } from "./difficulty";
+import { recordMetric, RETELLING_METRIC } from "./metrics";
 import { openUnlockQueue, type UnlockQueue, type UnlockQueueItem } from "./unlock-queue";
 
 // 内容管道（issue #10）：链接/文本入口 → 正文抓取 → 难度管道 assess → 分流。
 // 对外仅暴露 ingest(url) 与队列维护；L1/L2/L3 与 extractor/simplifier 均为实现细节。
+// 易腐 + 太难的出路（issue #19，mvp.md 故事 9/10）：简化成功 → 简化版；
+// 简化失败 → 角色转述任务（retell_tasks），不再纯搁置。
 
 export type ContentExtractor = (
   url: string,
@@ -26,7 +29,7 @@ export type ContentSimplifier = (input: {
 }) => Promise<{ title: string; body: string }>;
 
 export type IngestResult = {
-  kind: "direct" | "simplified" | "unlock_queued" | "dismissed";
+  kind: "direct" | "simplified" | "unlock_queued" | "retell";
   original: {
     id: string;
     title: string | null;
@@ -38,6 +41,21 @@ export type IngestResult = {
   perishability: "perishable" | "evergreen";
   simplified?: { id: string; title: string; body: string };
   unlockLabel?: string;
+  // 简化失败的易腐难文：转述任务已入队，待壳层注入角色会话（issue #19）。
+  retell?: RetellTask;
+};
+
+// 角色转述任务（issue #19，mvp.md 故事 10）：简化失败的易腐难文交给好友角色，
+// 由角色用大白话找用户聊文章讲了什么，用户当下即可参与讨论。
+// 不泄题语义：转述不绑定任何埋伏目标语块、不要求用户产出——它不是考核，
+// 因而不触发 ADR-0013 的话题生成硬规则；角色自然转述中用到在库语块属于
+// 顺带复现，判分管道按常规暴露规则处理。
+export type RetellTask = {
+  contentId: string;
+  title: string | null;
+  sourceUrl: string;
+  // 注入角色 system prompt 的转述提示（壳层只搬运，不解释）。
+  prompt: string;
 };
 
 export type ContentPipelineOptions = {
@@ -72,6 +90,11 @@ export type ContentPipeline = {
   ingestProvided(input: IngestProvidedInput): Promise<IngestResult>;
   listUnlockQueue(): UnlockQueueItem[];
   expireUnlockQueue(now?: number): string[];
+  // 待投递的转述任务（issue #19），按创建时间正序；壳层每轮对话取一条注入
+  // 角色 prompt，注入后调用 markRetellDelivered。
+  pendingRetells(): RetellTask[];
+  // 标记转述任务已注入角色会话，并记 retelling-delivered 埋点。
+  markRetellDelivered(contentId: string): void;
 };
 
 const LEVEL_ORDER: readonly Cefr[] = ["A1", "A2", "B1", "B2", "C1", "C2"];
@@ -82,6 +105,34 @@ function levelIndex(level: Cefr): number {
 
 function isHard(level: Cefr, threshold: Cefr): boolean {
   return levelIndex(level) >= levelIndex(threshold);
+}
+
+// 转述提示正文上限：避免超长文章把角色 prompt 撑爆（超出部分截断，
+// 角色聊要点足够，用户可点原文链接读全文）。
+const RETELL_BODY_LIMIT = 4000;
+
+// 角色转述提示（issue #19）：让角色像朋友一样自然聊起这篇文章——
+// 大白话讲清要点、邀请讨论；明确不考核、不上课、不预设目标表达。
+export function buildRetellPrompt(input: {
+  title: string | null;
+  body: string;
+  sourceUrl: string;
+}): string {
+  const body =
+    input.body.length > RETELL_BODY_LIMIT
+      ? `${input.body.slice(0, RETELL_BODY_LIMIT)}\n…（后文从略）`
+      : input.body;
+  return [
+    `你刚读到一篇你可能会感兴趣的文章${input.title ? `：《${input.title}》` : ""}。`,
+    "请像朋友分享新鲜事一样，用轻松的网聊语气主动跟用户聊这篇文章：",
+    "- 用大白话讲清它讲了什么、为什么有意思（两三句即可）；",
+    "- 自然邀请用户说说看法，让用户现在就能参与这个话题；",
+    "- 不要上课、不要逐句翻译、不要考用户任何表达；",
+    `- 若用户想读原文，给出链接：${input.sourceUrl}`,
+    "",
+    "文章原文（供你提炼要点）：",
+    body,
+  ].join("\n");
 }
 
 export function openContentPipeline(options: ContentPipelineOptions): ContentPipeline {
@@ -115,6 +166,22 @@ export function openContentPipeline(options: ContentPipelineOptions): ContentPip
        difficulty_score, cefr_estimate, perishability, unlock_level,
        status, pipeline_status, expires_at, simplified_source_id, audio_url, created_at
      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  );
+
+  const insertRetellTask = db.prepare(
+    `INSERT INTO retell_tasks (id, user_id, language, content_id, prompt, status, created_at, delivered_at)
+     VALUES (?, ?, ?, ?, ?, 'pending', ?, NULL)`,
+  );
+  const listPendingRetells = db.prepare(
+    `SELECT content_id, prompt FROM retell_tasks
+     WHERE user_id = ? AND language = ? AND status = 'pending'
+     ORDER BY created_at`,
+  );
+  const getRetellContent = db.prepare(
+    "SELECT id, title, source_url FROM content_items WHERE id = ? AND user_id = ?",
+  );
+  const markRetellTaskDelivered = db.prepare(
+    "UPDATE retell_tasks SET status = 'delivered', delivered_at = ? WHERE content_id = ? AND user_id = ? AND status = 'pending'",
   );
 
   function createContentRow(params: {
@@ -243,9 +310,9 @@ export function openContentPipeline(options: ContentPipelineOptions): ContentPip
           },
         };
       } catch {
-        // 简化失败：按 mvp.md 规则「易腐+太难 → 改写版，不进解锁队列」字面执行——
-        // 搁置原文（留档不丢），不进队列、不设过期。unlock-queue 的过期机制
-        // 保留给模块自身与未来入口，管道不再喂入易腐条目。
+        // 简化失败：原文留档不丢（dismissed，不进解锁队列、不设过期）；
+        // 同时生成角色转述任务（issue #19，mvp.md 故事 10）——由好友角色
+        // 用大白话找用户聊文章要点，取代纯搁置。
         createContentRow({
           id: originalId,
           sourceUrl: input.sourceUrl,
@@ -261,7 +328,24 @@ export function openContentPipeline(options: ContentPipelineOptions): ContentPip
           feedId: input.feedId ?? null,
           audioUrl: input.audioUrl ?? null,
         });
-        return { ...baseResult, kind: "dismissed" };
+        const prompt = buildRetellPrompt({
+          title: input.title ?? null,
+          body: input.body,
+          sourceUrl: input.sourceUrl,
+        });
+        insertRetellTask.run(
+          clock.newId(),
+          userId,
+          language,
+          originalId,
+          prompt,
+          clock.now(),
+        );
+        return {
+          ...baseResult,
+          kind: "retell",
+          retell: { contentId: originalId, title: input.title ?? null, sourceUrl: input.sourceUrl, prompt },
+        };
       }
     }
 
@@ -304,6 +388,40 @@ export function openContentPipeline(options: ContentPipelineOptions): ContentPip
     ingestProvided,
     listUnlockQueue: () => unlockQueue.list(),
     expireUnlockQueue: (now?: number) => unlockQueue.expireOld(now),
+
+    pendingRetells(): RetellTask[] {
+      const rows = listPendingRetells.all(userId, language) as unknown as {
+        content_id: string;
+        prompt: string;
+      }[];
+      return rows.map((row) => {
+        const content = getRetellContent.get(row.content_id, userId) as
+          | { id: string; title: string | null; source_url: string }
+          | undefined;
+        return {
+          contentId: row.content_id,
+          title: content?.title ?? null,
+          sourceUrl: content?.source_url ?? "",
+          prompt: row.prompt,
+        };
+      });
+    },
+
+    markRetellDelivered(contentId: string): void {
+      const now = clock.now();
+      const result = markRetellTaskDelivered.run(now, contentId, userId);
+      // changes 为 0 说明任务不存在或已投递：不重复计埋点。
+      if (Number(result.changes) === 0) return;
+      recordMetric({
+        db,
+        clock,
+        language,
+        name: RETELLING_METRIC,
+        value: 1,
+        payload: { contentId },
+        userId,
+      });
+    },
   };
 }
 

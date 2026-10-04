@@ -3,6 +3,7 @@ import {
   AMBUSH_HIT_METRIC,
   AMBUSH_REPEAT_WINDOW_MS,
   createJudge,
+  firstHelpRequestIndex,
   MAX_AMBUSH_CHUNKS,
   MAX_BURIALS_IN_WINDOW,
   MAX_TOPICS_PER_DAY,
@@ -295,6 +296,139 @@ describe("resolveTopic：近期暴露按语块分别判定（ADR-0013）", () =>
       .all(topic.topicId, "c2") as unknown as { event_type: string; assistance: string | null }[];
     expect(events).toEqual([
       { event_type: "assisted-production", assistance: "assisted" },
+    ]);
+  });
+});
+
+describe("firstHelpRequestIndex：求助标记口径（issue #18）", () => {
+  it("无求助标记返回 -1；多个标记取最早起点", () => {
+    expect(firstHelpRequestIndex("I look for my keys every morning.")).toBe(-1);
+    expect(firstHelpRequestIndex("How are you? I look for my keys.")).toBe(-1);
+    expect(firstHelpRequestIndex("How do you say 寻找 in English?")).toBe(0);
+    const text = "I look for my keys. 这个怎么用英语说？help me";
+    // 最早标记是「怎么用」（「这个」本身不是求助标记）。
+    expect(firstHelpRequestIndex(text)).toBe(text.indexOf("怎么用"));
+  });
+});
+
+describe("resolveTopic：用户先求助计入辅助（issue #18，ADR-0013 第三支；求助信号与暴露证据分离）", () => {
+  function setup() {
+    const harness = makeHarness();
+    makeDue(harness, ["c1", "c2"], { forms: { c1: "look for", c2: "see you around" } });
+    const { db, clock, store } = harness;
+    const ambush = openAmbush({ db, clock });
+    clock.set(T0 + 2 * DAY);
+    const topic = ambush.openTopic("en")!;
+    const judge = createJudge({
+      db,
+      usageJudge: fakeUsageJudge({ outcome: "correct", confidence: 0.95 }),
+    });
+    return { db, store, ambush, topic, judge };
+  }
+
+  function eventsOf(db: ReturnType<typeof makeHarness>["db"], topicId: string, chunkId: string) {
+    return db
+      .prepare(
+        "SELECT event_type, outcome, assistance FROM events WHERE topic_id = ? AND chunk_id = ? AND event_type != 'initial-learning'",
+      )
+      .all(topicId, chunkId) as unknown as {
+      event_type: string;
+      outcome: string | null;
+      assistance: string | null;
+    }[];
+  }
+
+  it("求助信号不进判分输入：判分管道的 exposedRecently 只含暴露证据", async () => {
+    const { db, store, ambush, topic } = setup();
+    // spy 用法判分器：先求助时 exposedRecently 必须为 false——求助是用户侧
+    // 辅助信号，注入判分 prompt 会被表述成「角色示范过该语块形式」（语义错误）。
+    let seenExposed: boolean | undefined;
+    const judge = createJudge({
+      db,
+      usageJudge: {
+        name: "spy-usage",
+        version: "0.1",
+        async judgeUsage(input) {
+          seenExposed = input.exposedRecently;
+          return { outcome: "correct", confidence: 0.9 };
+        },
+      },
+    });
+    await ambush.resolveTopic({
+      topicId: topic.topicId,
+      userText: "How do you say 寻找 in English? I look for my keys every morning.",
+      judge,
+      store,
+    });
+    expect(seenExposed).toBe(false);
+  });
+
+  it("求助标记先于语块命中：判对也计辅助（assisted-production，hit=0）", async () => {
+    const { db, store, ambush, topic, judge } = setup();
+    const resolved = await ambush.resolveTopic({
+      topicId: topic.topicId,
+      userText: "How do you say 寻找 in English? I look for my keys every morning.",
+      judge,
+      store,
+    });
+
+    const c1 = resolved.placements.find((p) => p.chunkId === "c1")!;
+    expect(c1.outcome).toBe("missed");
+    expect(eventsOf(db, topic.topicId, "c1")).toEqual([
+      { event_type: "assisted-production", outcome: "correct", assistance: "assisted" },
+    ]);
+  });
+
+  it("语块命中先于求助标记：先产出后提问，仍算独立产出（hit=1）", async () => {
+    const { db, store, ambush, topic, judge } = setup();
+    const resolved = await ambush.resolveTopic({
+      topicId: topic.topicId,
+      userText: "I look for my keys every morning. How do you say 寻找 in English?",
+      judge,
+      store,
+    });
+
+    const c1 = resolved.placements.find((p) => p.chunkId === "c1")!;
+    expect(c1.outcome).toBe("hit");
+    expect(eventsOf(db, topic.topicId, "c1")).toEqual([
+      { event_type: "independent-production", outcome: "correct", assistance: "none" },
+    ]);
+  });
+
+  it("中文显式求助标记（怎么说）同样触发辅助", async () => {
+    const { db, store, ambush, topic, judge } = setup();
+    await ambush.resolveTopic({
+      topicId: topic.topicId,
+      userText: "这个怎么用英语说？I look for my keys every morning.",
+      judge,
+      store,
+    });
+
+    expect(eventsOf(db, topic.topicId, "c1")).toEqual([
+      { event_type: "assisted-production", outcome: "correct", assistance: "assisted" },
+    ]);
+  });
+
+  it("求助标记与近期角色示范相互独立，按语块分别判定", async () => {
+    const { db, store, ambush, topic, judge } = setup();
+    const resolved = await ambush.resolveTopic({
+      topicId: topic.topicId,
+      userText: "How do you say 寻找 in English? I look for my keys and see you around town.",
+      judge,
+      store,
+      // 角色只示范过 c2；c1 的辅助来自用户先求助，c2 的辅助来自示范。
+      recentCompanionTexts: ["Anyway, I'll see you around!"],
+    });
+
+    const c1 = resolved.placements.find((p) => p.chunkId === "c1")!;
+    const c2 = resolved.placements.find((p) => p.chunkId === "c2")!;
+    expect(c1.outcome).toBe("missed");
+    expect(c2.outcome).toBe("missed");
+    expect(eventsOf(db, topic.topicId, "c1")).toEqual([
+      { event_type: "assisted-production", outcome: "correct", assistance: "assisted" },
+    ]);
+    expect(eventsOf(db, topic.topicId, "c2")).toEqual([
+      { event_type: "assisted-production", outcome: "correct", assistance: "assisted" },
     ]);
   });
 });

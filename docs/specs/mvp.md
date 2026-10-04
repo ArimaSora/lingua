@@ -123,7 +123,7 @@
 
 **度量（首日埋点）**
 
-- 埋伏命中率、话题回应率、语块掌握曲线、留存。
+- 埋伏命中率、话题回应率、角色转述投递（`retelling-delivered`，issue #19）、语块掌握曲线、留存。
 - 验证约定：4 周自测；话题回应率 ≥50%、命中率 <30% 先调话题生成；看什么数据调什么旋钮（操作手册：docs/validation.md）。
 
 ## Testing Decisions
@@ -186,3 +186,27 @@
 - **接缝清点**（ADR-0017）：删渠道抽象层与自建 LLM provider 端口；真接缝白名单 = Judge / 时钟端口（含 ID）/ 事件存储注入口；内部测试接缝只此一个，其余经包边界。
 - digest 改三段式并收拢选料+预算+渲染；难度管道对外仅 `assess(content)`；调度器单一模块，入账改惰性结算。
 - 票 05（Web Chat 壳）为集成票，手工/e2e 验收；带规则的部分（角色卡→digest 输入、翻译折叠档位）必须下沉 lingua-core。
+
+### 实现映射补记（issue #20，2026-10-04）
+
+第二轮 code-review（spec 轴）发现票 04/05 的部分验收语句在实现中选择了等效但不同的落点。逐条映射如下；凡实现与 spec 字面有偏差的，已将等效实现写回本 spec（保持「spec 是唯一事实源」）。
+
+**票 04（准入控制与冷启动，ADR-0016）**
+
+| 验收语句 | 实现落点 |
+|-|-|
+| 首周未学习的用户第 8 天仍能启动第一条闭环（种子期无历史要求） | `packages/lingua-core/src/admission.ts`（开户即入账当日额度，查询时惰性结算，速率无历史要求）；`test/admission.test.ts`「首周未学习的用户第 8 天仍能启动第一条闭环」「开户即入账当日额度」 |
+| 完成量为零时保底每日入账 1；小数额度经余额累积处理 | `admission.ts`：`ADAPTIVE_MIN_DAILY_ACCRUAL = 1`、`BALANCE_CAP = 15`、余额累积 + 整数支出；`test/admission.test.ts`「完成量为零时保底每日入账 1」「每日入账 = clamp(近 7 天日均完成 × 0.5, 1, 10)」 |
+| 积压超阈值暂停新增、回落自动恢复，余额上限生效 | `admission.ts`：`BACKLOG_PAUSE_THRESHOLD = 30` / `BACKLOG_RESUME_THRESHOLD = 20`（带滞后，只暂停不扣减）；`test/admission.test.ts`「到期积压 >30 暂停支出…回落至 ≤20 恢复」「积压 21–30…」「余额上限 15」 |
+
+spec 写回：上文「修订记录」第 4 条的「每日新增上限按近 7 天实际完成量自适应」按第三轮修订与 ADR-0016 落实为**额度账户制**——每日入账（种子期 5；自适应期 clamp(近 7 天日均完成 × 0.5, 1, 10)）、余额累积（上限 15）、整数支出、积压 >30 暂停 / ≤20 恢复、入账为查询时惰性结算。
+
+**票 05（极简 Web Chat 与双联系人）**
+
+| 验收语句 | 实现落点 |
+|-|-|
+| 能与角色完成一轮真实对话（DeepSeek），消息持久化 | `apps/shell/src/agent.ts`（Vercel AI SDK 工具循环）、`apps/shell/src/server.ts`（Web Chat 直连，无渠道抽象层，ADR-0017）；持久化 `packages/lingua-core/src/message-store.ts`，包边界测试 `test/message-store.test.ts` |
+| 角色消息带可展开翻译；系统会话存在且为纯工具文案 | 折叠档位判定下沉 core：`src/scaffolding.ts` `scaffoldingPolicy`（仅 full-support 档附翻译）+ `test/scaffolding.test.ts`；壳层拆分 `agent.ts` `TRANSLATION_MARKER`/`splitCompanionText`；系统联系人 `apps/shell/src/system-contact.ts`（纯工具文案） |
+| 手工/e2e 冒烟验收；角色卡与折叠档位的规则部分在 lingua-core 有包边界测试 | `apps/shell/scripts/smoke.ts`（`MockLanguageModelV4` 假模型 e2e，`pnpm --filter @lingua/shell smoke`）；`test/character-card.test.ts`（角色卡 → digest「角色须知」）；`test/scaffolding.test.ts`（翻译折叠档位） |
+
+spec 写回：票面「A1–A2 档角色消息附可展开中文翻译」按 ADR-0015 三旋钮分离落实为**行为命名档位**——翻译随 `full-support` 档（「A1–A2 全支架」）附送，档位本身不复用 CEFR 标签（见上文「双语与语域」与 `scaffolding.ts` 常量）。票面「左侧联系人列表」落实为 server.ts 静态 UI + `message-store` 按联系人/语言隔离，双联系人会话模型不变。

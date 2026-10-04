@@ -1,4 +1,4 @@
-import { generateText, jsonSchema, stepCountIs, tool, type LanguageModel } from "ai";
+import { generateText, jsonSchema, stepCountIs, tool } from "ai";
 import {
   addRelationshipFact,
   effectiveRegisterRange,
@@ -21,6 +21,7 @@ import {
   type ScaffoldingPolicy,
   type ScaffoldingTier,
 } from "@lingua/core";
+import type { ModelSource } from "./model-registry";
 
 // 好友角色 agent loop（issue #5）：Web Chat 直连，无渠道抽象层（ADR-0017）。
 // 每轮：持久化用户消息 → renderDigest 注入 → Vercel AI SDK 工具循环 →
@@ -33,6 +34,7 @@ import {
 export const TRANSLATION_MARKER = "[[翻译]]";
 
 export const TOPIC_PROMPT_SECTION = "Conversation topic to raise naturally";
+export const RETELL_PROMPT_SECTION = "Article to naturally bring up and retell in plain words";
 
 export function splitCompanionText(raw: string): { text: string; translation: string | null } {
   const index = raw.indexOf(TRANSLATION_MARKER);
@@ -75,8 +77,19 @@ export function buildCompanionPrompt(options: {
   // 埋伏话题生成提示（issue #07）：来自 lingua-core 的不泄题提示，角色据此
   // 自然起话题；null 表示本轮无话题。
   topicPrompt?: string | null;
+  // 角色转述提示（issue #19）：简化失败的易腐难文，角色据此用大白话聊文章要点；
+  // null 表示本轮无转述任务。
+  retellPrompt?: string | null;
 }): string {
-  const { card, tier, policy, digestText, knowledgeCatalog = [], topicPrompt = null } = options;
+  const {
+    card,
+    tier,
+    policy,
+    digestText,
+    knowledgeCatalog = [],
+    topicPrompt = null,
+    retellPrompt = null,
+  } = options;
   const registerRange = effectiveRegisterRange(tier, card.registerRange);
   const lines = [
     `You are ${card.name}, the user's close friend — not a tutor, not an assistant.`,
@@ -116,6 +129,13 @@ export function buildCompanionPrompt(options: {
       topicPrompt,
     );
   }
+  if (retellPrompt) {
+    lines.push(
+      "",
+      `${RETELL_PROMPT_SECTION} (share it like a friend sharing something interesting; plain words, invite the user's take; do not quiz or teach):`,
+      retellPrompt,
+    );
+  }
   lines.push(...buildKnowledgeSection(knowledgeCatalog));
   lines.push(
     "",
@@ -133,17 +153,21 @@ export type CompanionAgent = {
 };
 
 export type CompanionAgentDeps = {
-  model: LanguageModel;
+  // 模型经 ModelSource 取（零配置启动后可运行时填入密钥，无需重启）；
+  // 未配置时 get() 抛带指引的友好错误。
+  model: ModelSource;
   db: Database;
   clock: Clock;
   card: CharacterCard;
   knowledge: KnowledgeStore;
   // 埋伏复习接线（issue #07）：结算用户回合 + 提供本轮话题注入提示。
   ambushLoop?: import("./ambush-loop").AmbushLoop;
+  // 角色转述接线（issue #19）：提供本轮转述注入提示。
+  retellLoop?: import("./retell-loop").RetellLoop;
 };
 
 export function createCompanionAgent(deps: CompanionAgentDeps): CompanionAgent {
-  const { model, db, clock, card, knowledge } = deps;
+  const { db, clock, card, knowledge } = deps;
   const language = card.languagePair.target;
   const messages = openMessageStore({ db, clock });
   const catalog = knowledge.catalog({ language });
@@ -175,6 +199,7 @@ export function createCompanionAgent(deps: CompanionAgentDeps): CompanionAgent {
       const policy = scaffoldingPolicy(effectiveTier);
       const digest = renderDigest({ db, clock, language, tier: effectiveTier });
       const topicPrompt = deps.ambushLoop?.topicPromptForTurn() ?? null;
+      const retellPrompt = deps.retellLoop?.promptForTurn() ?? null;
       const system = buildCompanionPrompt({
         card,
         tier: effectiveTier,
@@ -182,6 +207,7 @@ export function createCompanionAgent(deps: CompanionAgentDeps): CompanionAgent {
         digestText: digest.text,
         knowledgeCatalog: catalog,
         topicPrompt,
+        retellPrompt,
       });
       const history = messages
         .list({ language, contact: "companion", limit: HISTORY_LIMIT })
@@ -229,7 +255,7 @@ export function createCompanionAgent(deps: CompanionAgentDeps): CompanionAgent {
       });
 
       const result = await generateText({
-        model,
+        model: deps.model.get(),
         system,
         messages: history.map((message) => ({ ...message })),
         tools: { remember_fact: rememberFact, lookup_knowledge_entry: lookupKnowledgeEntry },
