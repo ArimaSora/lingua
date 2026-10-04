@@ -11,11 +11,14 @@ export const AMBUSH_HIT_METRIC = "ambush-hit";
 export const TOPIC_RESPONSE_METRIC = "topic-response";
 // 每次壳层启动一条：value = 1，created_at 用于计算主动打开留存。
 export const APP_OPEN_METRIC = "app-open";
+// 每次转述任务投递给角色一条：value = 1（issue #19，易腐难文的角色转述出路）。
+export const RETELLING_METRIC = "retelling-delivered";
 
 export type MetricName =
   | typeof AMBUSH_HIT_METRIC
   | typeof TOPIC_RESPONSE_METRIC
-  | typeof APP_OPEN_METRIC;
+  | typeof APP_OPEN_METRIC
+  | typeof RETELLING_METRIC;
 
 export type MetricInput = {
   db: Database;

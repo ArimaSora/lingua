@@ -214,8 +214,8 @@ export function formatIngestReply(result: Awaited<ReturnType<ContentPipeline["in
   if (result.kind === "unlock_queued") {
     return `已收入解锁队列，${result.unlockLabel}。等你的水平到位后会主动推送。`;
   }
-  if (result.kind === "dismissed") {
-    return `这篇时效性内容太难，改写又没成功，按规则不进解锁队列，先搁置。原文链接：${result.original.sourceUrl}`;
+  if (result.kind === "retell") {
+    return `这篇时效性内容太难，改写未成功，已转给好友角色——他会找你用大白话聊这篇文章的要点。原文链接：${result.original.sourceUrl}`;
   }
   return `已收到链接，难度约 ${result.level}，可直接阅读。`;
 }

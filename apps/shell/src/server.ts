@@ -47,6 +47,7 @@ import {
 } from "@lingua/core";
 import { createCompanionAgent, type CompanionAgent } from "./agent";
 import { createAmbushLoop, createDefaultJudge } from "./ambush-loop";
+import { createRetellLoop } from "./retell-loop";
 import { createReadabilityExtractor } from "./content-extractor";
 import { loadConfig, resolveHome } from "./config";
 import { dataDir } from "./data-dir";
@@ -242,6 +243,8 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
   const ambush = openAmbush({ db, clock });
   const judge = options.judge ?? createDefaultJudge(db, model);
   const ambushLoop = createAmbushLoop({ db, clock, language, ambush, eventStore, store, judge });
+  // 角色转述接线（issue #19）：每轮取一条待投递转述任务注入角色 prompt。
+  const retellLoop = createRetellLoop({ pipeline });
   const agent: CompanionAgent = createCompanionAgent({
     model,
     db,
@@ -249,6 +252,7 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
     card,
     knowledge,
     ambushLoop,
+    retellLoop,
   });
 
   // Bootstrap 课包（issue #6）：数据目录 bootstrap-pack.json > 显式路径 > 内置首批课包；

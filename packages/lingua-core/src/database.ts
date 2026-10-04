@@ -2,7 +2,7 @@ import { DatabaseSync } from "node:sqlite";
 
 export type Database = DatabaseSync;
 
-export const SCHEMA_VERSION = 13;
+export const SCHEMA_VERSION = 14;
 
 export function openDatabase(path: string): Database {
   const db = new DatabaseSync(path);
@@ -389,6 +389,27 @@ const MIGRATIONS: Migration[] = [
       ALTER TABLE feeds ADD COLUMN last_fetched_at INTEGER;
       ALTER TABLE feeds ADD COLUMN fetch_interval_ms INTEGER;
       ALTER TABLE content_items ADD COLUMN audio_url TEXT;
+    `,
+  },
+  {
+    version: 14,
+    // 易腐内容「角色转述」出路（issue #19，mvp.md 故事 10）：
+    // 简化失败的易腐难文不再只搁置——生成转述任务交给好友角色，由角色用
+    // 大白话找用户聊文章要点；原文行仍以 dismissed 留档不丢。
+    sql: `
+      CREATE TABLE retell_tasks (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        language TEXT NOT NULL,
+        content_id TEXT NOT NULL REFERENCES content_items (id),
+        prompt TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending'
+          CHECK (status IN ('pending','delivered')),
+        created_at INTEGER NOT NULL,
+        delivered_at INTEGER
+      );
+      CREATE INDEX idx_retell_tasks_pending
+        ON retell_tasks (user_id, language, status, created_at);
     `,
   },
 ];

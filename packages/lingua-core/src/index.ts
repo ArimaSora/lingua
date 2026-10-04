@@ -88,7 +88,7 @@ export { FakeClock, SystemClock } from "./clock";
 export type { Clock } from "./clock";
 export { checkConfigPermissions, redactConfig, SECRET_MASK } from "./config-hardening";
 export type { ConfigPermissionReport, ConfigPermissionStatus } from "./config-hardening";
-export { openContentPipeline } from "./content-pipeline";
+export { buildRetellPrompt, openContentPipeline } from "./content-pipeline";
 export type {
   ContentExtractor,
   ContentPipeline,
@@ -96,6 +96,7 @@ export type {
   ContentSimplifier,
   IngestProvidedInput,
   IngestResult,
+  RetellTask,
 } from "./content-pipeline";
 export { MIGRATION_VERSIONS, migrate, openDatabase, SCHEMA_VERSION } from "./database";
 export type { Database } from "./database";
@@ -170,7 +171,13 @@ export type {
   UsageJudgeInput,
   UsageVerdict,
 } from "./judge";
-export { AMBUSH_HIT_METRIC, APP_OPEN_METRIC, recordMetric, TOPIC_RESPONSE_METRIC } from "./metrics";
+export {
+  AMBUSH_HIT_METRIC,
+  APP_OPEN_METRIC,
+  recordMetric,
+  RETELLING_METRIC,
+  TOPIC_RESPONSE_METRIC,
+} from "./metrics";
 export type { MetricInput, MetricName } from "./metrics";
 export { queryMetricsPanel } from "./metrics-panel";
 export type {

@@ -103,7 +103,7 @@ describe("内容管道：链接 → 抓取 → 难度评估 → 分流", () => {
     expect(queue[0]!.unlockLabel).toBe("原文难度约 C1");
   });
 
-  it("简化器失败时易腐难文按规则搁置，不进解锁队列", async () => {
+  it("简化器失败时易腐难文生成角色转述任务，原文留档、不进解锁队列（issue #19）", async () => {
     const { db, clock } = setup();
     const body = "Government increase substantial however ubiquitous.";
     const pipeline = openContentPipeline({
@@ -118,14 +118,65 @@ describe("内容管道：链接 → 抓取 → 难度评估 → 分流", () => {
     });
 
     const result = await pipeline.ingest({ url: "https://news.example.com/2026/10/03/agent-release" });
-    expect(result.kind).toBe("dismissed");
+    expect(result.kind).toBe("retell");
     expect(result.perishability).toBe("perishable");
     expect(pipeline.listUnlockQueue()).toHaveLength(0);
 
+    // 原文行仍以 dismissed 留档不丢。
     const row = db
       .prepare("SELECT pipeline_status FROM content_items WHERE id = ?")
       .get(result.original.id) as { pipeline_status: string };
     expect(row.pipeline_status).toBe("dismissed");
+
+    // 转述任务待投递：提示含原文链接与要点素材，且明确不考核。
+    const pending = pipeline.pendingRetells();
+    expect(pending).toHaveLength(1);
+    expect(pending[0]!.contentId).toBe(result.original.id);
+    expect(pending[0]!.prompt).toContain("https://news.example.com/2026/10/03/agent-release");
+    expect(pending[0]!.prompt).toContain("不要考用户任何表达");
+
+    // 投递后任务出队，并记 retelling-delivered 埋点；重复投递不重复计。
+    pipeline.markRetellDelivered(result.original.id);
+    expect(pipeline.pendingRetells()).toHaveLength(0);
+    pipeline.markRetellDelivered(result.original.id);
+    const metrics = db
+      .prepare("SELECT metric_name, value FROM metric_events WHERE metric_name = ?")
+      .all("retelling-delivered") as unknown as { metric_name: string; value: number }[];
+    expect(metrics).toEqual([{ metric_name: "retelling-delivered", value: 1 }]);
+  });
+
+  it("转述任务按语言隔离，pendingRetells 按创建时间正序", async () => {
+    const { db, clock } = setup();
+    const body = "Government increase substantial however ubiquitous.";
+    const failing: ContentSimplifier = async () => {
+      throw new Error("model unavailable");
+    };
+    const en = openContentPipeline({
+      db,
+      clock,
+      language: "en",
+      extractor: createExtractor(body),
+      simplifier: failing,
+      wordlist: fakeWordlist(),
+    });
+    const ja = openContentPipeline({
+      db,
+      clock,
+      language: "ja",
+      extractor: createExtractor(body),
+      simplifier: failing,
+      wordlist: fakeWordlist(),
+    });
+
+    await en.ingest({ url: "https://news.example.com/2026/10/03/a" });
+    await ja.ingest({ url: "https://news.example.com/2026/10/03/b" });
+    await en.ingest({ url: "https://news.example.com/2026/10/04/c" });
+
+    expect(en.pendingRetells().map((t) => t.sourceUrl)).toEqual([
+      "https://news.example.com/2026/10/03/a",
+      "https://news.example.com/2026/10/04/c",
+    ]);
+    expect(ja.pendingRetells()).toHaveLength(1);
   });
 
   it("过期清理只删 unlock queue 中超时的易腐条目", async () => {
