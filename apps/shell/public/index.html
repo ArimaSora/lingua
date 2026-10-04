@@ -143,11 +143,46 @@
   }
   #send:disabled { opacity: 0.5; cursor: default; }
   #status { font-size: 12px; color: var(--muted); padding: 0 20px 8px; background: #fff; }
+  #metrics {
+    margin-top: auto;
+    padding: 12px;
+    background: var(--sidebar-active);
+    border-radius: 8px;
+    font-size: 12px;
+  }
+  #metrics h2 {
+    font-size: 12px;
+    font-weight: 600;
+    margin: 0 0 8px;
+    color: var(--sidebar-text);
+  }
+  #metrics .metric {
+    display: flex;
+    justify-content: space-between;
+    color: var(--sidebar-text);
+    margin-bottom: 4px;
+  }
+  #metrics .metric span:last-child { font-weight: 600; }
+  #metrics .series { display: flex; gap: 2px; align-items: flex-end; height: 24px; margin-top: 6px; }
+  #metrics .bar {
+    flex: 1;
+    background: #10b981;
+    border-radius: 2px;
+    min-height: 2px;
+  }
 </style>
 </head>
 <body>
   <nav id="sidebar">
     <h1>Lingua</h1>
+    <div id="metrics">
+      <h2>指标（近 28 天）</h2>
+      <div class="metric"><span>埋伏命中率</span><span id="m-ambush">—</span></div>
+      <div class="metric"><span>话题回应率</span><span id="m-response">—</span></div>
+      <div class="metric"><span>次日留存</span><span id="m-d1">—</span></div>
+      <div class="metric"><span>7 日留存</span><span id="m-d7">—</span></div>
+      <div class="series" id="m-series"></div>
+    </div>
   </nav>
   <div id="main">
     <div id="chat-header"></div>
@@ -353,10 +388,42 @@
     }
   });
 
+  function pct(value) {
+    return `${Math.round(value * 100)}%`;
+  }
+
+  function renderMasterySeries(series) {
+    const el = document.getElementById("m-series");
+    el.replaceChildren();
+    if (!series.length) return;
+    const max = Math.max(1, ...series.map((p) => p.averageMastery));
+    for (const point of series) {
+      const bar = document.createElement("div");
+      bar.className = "bar";
+      bar.style.height = `${Math.round((point.averageMastery / max) * 100)}%`;
+      bar.title = `${point.date}: ${pct(point.averageMastery)}`;
+      el.appendChild(bar);
+    }
+  }
+
+  async function refreshMetrics() {
+    try {
+      const metrics = await api("/api/metrics");
+      document.getElementById("m-ambush").textContent = pct(metrics.ambushHitRate);
+      document.getElementById("m-response").textContent = pct(metrics.topicResponseRate);
+      document.getElementById("m-d1").textContent = pct(metrics.retention.d1);
+      document.getElementById("m-d7").textContent = pct(metrics.retention.d7);
+      renderMasterySeries(metrics.masterySeries);
+    } catch (error) {
+      console.warn("指标刷新失败", error.message);
+    }
+  }
+
   (async function boot() {
     contacts = await api("/api/contacts");
     renderContacts();
     selectContact("companion");
+    await refreshMetrics();
     setInterval(() => void refreshMessages().catch(() => {}), 3000);
   })().catch((error) => {
     statusEl.textContent = error.message;

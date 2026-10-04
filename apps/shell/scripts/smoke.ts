@@ -178,6 +178,24 @@ try {
     assert.equal(callCount, 2, "工具循环应为两步（tool-call → text）");
   });
 
+  await check("验证面板：四指标由事件流计算，启动即记主动打开（issue #14）", async () => {
+    const metrics = await getJson(`${api}/api/metrics`);
+    assert.equal(metrics.language, "en");
+    assert.equal(typeof metrics.ambushHitRate, "number");
+    assert.equal(typeof metrics.topicResponseRate, "number");
+    assert.equal(metrics.masterySeries.length, 7, "PFA 掌握曲线为近 7 天时间序列");
+    for (const point of metrics.masterySeries) {
+      assert.match(point.date, /^\d{4}-\d{2}-\d{2}$/);
+      assert.equal(typeof point.averageMastery, "number");
+    }
+    assert.equal(typeof metrics.retention.d1, "number");
+    assert.equal(typeof metrics.retention.d7, "number");
+    const opens = server!.db
+      .prepare("SELECT COUNT(*) AS n FROM metric_events WHERE metric_name = 'app-open'")
+      .get() as { n: number };
+    assert.equal(opens.n, 1, "壳层启动应记一条 app-open（主动打开留存埋点）");
+  });
+
   await check("系统提示含人格、翻译标记指令与 digest 区", () => {
     assert.match(systemsSeen[0]!, /You are Maya/);
     assert.match(systemsSeen[0]!, new RegExp(TRANSLATION_MARKER.replace(/[[\]]/g, "\\$&")));
@@ -400,6 +418,11 @@ try {
         (await getJson(`${base(reopened.port)}/api/messages?contact=system`)).length,
         `重启 tick 不应推新课（ran: ${report.ran.join(",")}）`,
       );
+      // 每次壳层启动各记一条 app-open：留存分母按「主动打开日」计数。
+      const opens = reopened.db
+        .prepare("SELECT COUNT(*) AS n FROM metric_events WHERE metric_name = 'app-open'")
+        .get() as { n: number };
+      assert.equal(opens.n, 2, "重启应再记一条 app-open，不去重");
     } finally {
       await reopened.close();
       server = undefined;

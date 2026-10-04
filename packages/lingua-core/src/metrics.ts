@@ -9,8 +9,13 @@ import type { Database } from "./database";
 export const AMBUSH_HIT_METRIC = "ambush-hit";
 // 每次话题关闭一条：value = 1 用户回应了话题 / 0 话题超期未回应。
 export const TOPIC_RESPONSE_METRIC = "topic-response";
+// 每次壳层启动一条：value = 1，created_at 用于计算主动打开留存。
+export const APP_OPEN_METRIC = "app-open";
 
-export type MetricName = typeof AMBUSH_HIT_METRIC | typeof TOPIC_RESPONSE_METRIC;
+export type MetricName =
+  | typeof AMBUSH_HIT_METRIC
+  | typeof TOPIC_RESPONSE_METRIC
+  | typeof APP_OPEN_METRIC;
 
 export type MetricInput = {
   db: Database;

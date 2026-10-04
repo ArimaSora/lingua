@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import type { LanguageModel } from "ai";
 import {
+  APP_OPEN_METRIC,
   ensureLearnerProfile,
   formatScaffoldingSuggestion,
   getPendingSuggestion,
@@ -24,6 +25,8 @@ import {
   parseBootstrapPack,
   parseRssFeed,
   proposeScaffoldingTier,
+  queryMetricsPanel,
+  recordMetric,
   renderPendingSystemDigests,
   runBackup,
   SystemClock,
@@ -168,6 +171,17 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
   const language = card.languagePair.target;
   // 学习者档案初始化（issue #13）：以角色卡档位为默认值，不覆盖既有手动设置。
   ensureLearnerProfile({ db, clock, language, cardTier: card.scaffoldingTier });
+
+  // 主动打开留存（issue #14）：壳层启动时记录 app-open 事件。
+  recordMetric({
+    db,
+    clock,
+    language,
+    name: APP_OPEN_METRIC,
+    value: 1,
+    payload: { reason: "shell-start" },
+  });
+
   const store = openMessageStore({ db, clock });
 
   // 系统会话播种欢迎文案（仅首次）。
@@ -306,6 +320,11 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
         }
         if (req.method === "GET" && url.pathname === "/api/contacts") {
           json(res, 200, contacts);
+          return;
+        }
+        // 验证面板（issue #14）：四指标由事件流计算。
+        if (req.method === "GET" && url.pathname === "/api/metrics") {
+          json(res, 200, queryMetricsPanel({ db, clock, language }));
           return;
         }
         if (req.method === "GET" && url.pathname === "/api/messages") {

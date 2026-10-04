@@ -31,8 +31,8 @@ type Migration = {
 // 供「不泄题」规则审计。
 // 全部按语言隔离，user_id 预留。
 // 版本号占位协调：v5 归票 06（并发施工）；v6 归票 12；v7 归票 07；
-// v8 归票 10（并发施工）；v9 归本票（issue #8）；v10/v12 由其它并发票据占位
-// （09/14）；v11 归票 13；v13 归票 11。
+// v8 归票 10（并发施工）；v9 归票 08；v10 由票 09 占位（未启用）；
+// v11 归票 13；v12 归票 14（验证面板指标查询索引）；v13 归票 11。
 // v9：错误日志字段扩展（quote/chunk_id/phenomenon/correction）与
 // ambush_topics.digest_sent_at（系统小结发送标记），优先复用 v1 错误日志表。
 const MIGRATIONS: Migration[] = [
@@ -371,6 +371,14 @@ const MIGRATIONS: Migration[] = [
       ALTER TABLE learner_profiles ADD COLUMN last_suggested_at INTEGER;
       ALTER TABLE learner_profiles ADD COLUMN last_suggestion_response TEXT
         CHECK (last_suggestion_response IN ('accepted','rejected'));
+    `,
+  },
+  {
+    version: 12,
+    // 验证面板（issue #14）：指标事件表已有，加复合索引支撑面板查询。
+    sql: `
+      CREATE INDEX idx_metric_events_lookup
+        ON metric_events (user_id, language, metric_name, created_at);
     `,
   },
   {
