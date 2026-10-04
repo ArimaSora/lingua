@@ -404,7 +404,9 @@ export function openAmbush(options: AmbushOptions): Ambush {
     const placements = listTopicPlacements.all(topicId, userId) as unknown as PlacementRow[];
     // 「用户先求助」（issue #18，ADR-0013 第三支）：求助标记起点早于该语块
     // 命中起点才算「先」；命中位置复用判分管道的确定性匹配（词形还原 +
-    // token 区间），与 Judge 命中口径一致。
+    // token 区间），与 Judge 命中口径一致。注意：askedFirst 是用户侧辅助
+    // 信号，与暴露证据（exposedRecently，注入判分 prompt）分开计算——
+    // 求助不是「角色示范过该语块形式」，混进判分输入会造成语义错误。
     const helpIndex = firstHelpRequestIndex(userText);
     const descriptors: ChunkDescriptor[] = placements.map((placement) => {
       const row = getChunkDescriptor.get(placement.chunk_id, userId) as
@@ -428,20 +430,24 @@ export function openAmbush(options: AmbushOptions): Ambush {
     const { occurrences } = matchChunks(userText, descriptors);
     const occurrenceStart = new Map(occurrences.map((o) => [o.chunkId, o.startChar]));
 
-    const targets = placements.map((placement) => {
+    // 求助信号按语块单独算（不注入判分 prompt）：命中判定与事件辅助
+    // 两者都消费它。
+    const askedFirstByChunk = new Map<string, boolean>();
+    for (const placement of placements) {
       const start = occurrenceStart.get(placement.chunk_id) ?? -1;
-      const askedFirst = helpIndex !== -1 && start !== -1 && helpIndex < start;
-      return {
-        chunkId: placement.chunk_id,
-        // 暴露 = 调用方标记 OR 近几轮角色/系统消息中出现过该语块任一形式
-        //（ADR-0013，确定性规则在核心内判定，按语块分别计）OR 用户先求助
-        //（issue #18：本回合求助标记先于语块命中）。
-        exposedRecently:
-          exposedRecently ||
-          wasExposed(placement.chunk_id, recentCompanionTexts ?? []) ||
-          askedFirst,
-      };
-    });
+      askedFirstByChunk.set(
+        placement.chunk_id,
+        helpIndex !== -1 && start !== -1 && helpIndex < start,
+      );
+    }
+
+    // 判分输入保持纯暴露证据：调用方标记 OR 近几轮角色/系统消息中出现过
+    // 该语块任一形式（ADR-0013，确定性规则在核心内判定，按语块分别计）。
+    const targets = placements.map((placement) => ({
+      chunkId: placement.chunk_id,
+      exposedRecently:
+        exposedRecently || wasExposed(placement.chunk_id, recentCompanionTexts ?? []),
+    }));
 
     const request: JudgeRequest = {
       userText,
@@ -458,8 +464,12 @@ export function openAmbush(options: AmbushOptions): Ambush {
         throw new Error(`missing verdict for chunk ${placement.chunk_id}`);
       }
       const target = targets.find((t) => t.chunkId === placement.chunk_id)!;
+      const askedFirst = askedFirstByChunk.get(placement.chunk_id) ?? false;
+      // 命中 = 判对 且 无暴露 且 非先求助（issue #18：两种辅助各自独立）。
       const outcome: "hit" | "missed" =
-        verdict.outcome === "correct" && !target.exposedRecently ? "hit" : "missed";
+        verdict.outcome === "correct" && !target.exposedRecently && !askedFirst
+          ? "hit"
+          : "missed";
       updatePlacement.run(now, outcome, placement.id);
 
       if (verdict.outcome === "not-produced") {
@@ -477,7 +487,7 @@ export function openAmbush(options: AmbushOptions): Ambush {
           observationId,
           chunkId: placement.chunk_id,
           outcome: verdict.outcome,
-          assistance: target.exposedRecently ? "assisted" : "none",
+          assistance: target.exposedRecently || askedFirst ? "assisted" : "none",
           confidence: verdict.confidence,
           quote: verdict.quote,
           topicId,

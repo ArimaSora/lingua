@@ -311,7 +311,7 @@ describe("firstHelpRequestIndex：求助标记口径（issue #18）", () => {
   });
 });
 
-describe("resolveTopic：用户先求助计入辅助（issue #18，ADR-0013 第三支）", () => {
+describe("resolveTopic：用户先求助计入辅助（issue #18，ADR-0013 第三支；求助信号与暴露证据分离）", () => {
   function setup() {
     const harness = makeHarness();
     makeDue(harness, ["c1", "c2"], { forms: { c1: "look for", c2: "see you around" } });
@@ -337,6 +337,31 @@ describe("resolveTopic：用户先求助计入辅助（issue #18，ADR-0013 第�
       assistance: string | null;
     }[];
   }
+
+  it("求助信号不进判分输入：判分管道的 exposedRecently 只含暴露证据", async () => {
+    const { db, store, ambush, topic } = setup();
+    // spy 用法判分器：先求助时 exposedRecently 必须为 false——求助是用户侧
+    // 辅助信号，注入判分 prompt 会被表述成「角色示范过该语块形式」（语义错误）。
+    let seenExposed: boolean | undefined;
+    const judge = createJudge({
+      db,
+      usageJudge: {
+        name: "spy-usage",
+        version: "0.1",
+        async judgeUsage(input) {
+          seenExposed = input.exposedRecently;
+          return { outcome: "correct", confidence: 0.9 };
+        },
+      },
+    });
+    await ambush.resolveTopic({
+      topicId: topic.topicId,
+      userText: "How do you say 寻找 in English? I look for my keys every morning.",
+      judge,
+      store,
+    });
+    expect(seenExposed).toBe(false);
+  });
 
   it("求助标记先于语块命中：判对也计辅助（assisted-production，hit=0）", async () => {
     const { db, store, ambush, topic, judge } = setup();
