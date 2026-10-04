@@ -40,6 +40,19 @@ const fakeModel = new MockLanguageModelV4({
   doGenerate: async (options) => {
     callCount += 1;
     systemsSeen.push(typeof options.prompt === "string" ? options.prompt : JSON.stringify(options.prompt));
+    const seen = systemsSeen[systemsSeen.length - 1]!;
+    if (seen.includes("语言学习判分器")) {
+      // 埋伏判分轮（issue #07 接线）：假模型对判分 prompt 返回结构化 JSON。
+      return {
+        content: [{ type: "text", text: '{"outcome": "correct", "confidence": 0.9}' }],
+        finishReason: { unified: "stop" as const, raw: undefined },
+        warnings: [],
+        usage: {
+          inputTokens: { total: 10, noCache: 10, cacheRead: undefined, cacheWrite: undefined },
+          outputTokens: { total: 5, text: 5, reasoning: undefined },
+        },
+      };
+    }
     if (callCount === 1) {
       // 第一轮先调 remember_fact 工具，证明工具循环装配正确。
       return {
@@ -371,6 +384,13 @@ try {
     assert.match(html, /参考答案/, "折叠摘要/正文出现参考答案入口");
   });
 
+  await check("音频推送渲染为可播放 audio 元素（issue #11）", async () => {
+    const html = await fetch(`${api}/`).then((r) => r.text());
+    assert.match(html, /createElement\("audio"\)/, "推送文本中的 <audio> 标记应换成真实 audio 元素");
+    assert.match(html, /audio\.controls = true/);
+    assert.match(html, /AUDIO_TAG_RE/, "应识别服务端写入的受控 audio 标记");
+  });
+
   await check("系统会话可手动调档，立即生效", async () => {
     const reply = await postJson(`${api}/api/messages`, { contact: "system", text: "支架 on-request" });
     assert.equal(reply.role, "assistant");
@@ -382,6 +402,89 @@ try {
     assert.equal(reply.role, "assistant");
     assert.equal(reply.translation, null, "on-request 档不应保存翻译");
     assert.equal(callCount, 6, "调档后角色轮仍走模型一次");
+  });
+
+  await check("埋伏复习运行时接线：起话题 → 用户产出 → 判分落事件流（issue #07）", async () => {
+    const db = server!.db;
+    const DAY_MS = 24 * 60 * 60 * 1000;
+    const now = Date.now();
+
+    // 直接造两个「三天前预学」的到期语块（预学次日到期 → 现已到期）。
+    const insertChunk = db.prepare(
+      `INSERT INTO chunks (id, language, canonical_form, chunk_type, created_at) VALUES (?, 'en', ?, 'collocation', ?)`,
+    );
+    insertChunk.run("smoke-amb-1", "how's it going", now);
+    insertChunk.run("smoke-amb-2", "see you around", now);
+    for (const chunkId of ["smoke-amb-1", "smoke-amb-2"]) {
+      server!.eventStore.recordInitialLearning({
+        observationId: `smoke-prelearn-${chunkId}`,
+        chunkId,
+        occurredAt: now - 3 * DAY_MS,
+      });
+    }
+
+    // 回合 1：角色应起话题（prompt 注入 system）——假模型不知道话题内容，
+    // 但规划与注入在壳层与核心完成，用 DB 与 system prompt 断言。
+    await postJson(`${api}/api/messages`, { contact: "companion", text: "yo Maya, what's up?" });
+    const topic = db
+      .prepare(
+        `SELECT id, status, prompt FROM ambush_topics
+         WHERE id != 'smoke-topic' AND status = 'open' ORDER BY opened_at DESC LIMIT 1`,
+      )
+      .get() as { id: string; status: string; prompt: string } | undefined;
+    assert.ok(topic, "应规划出开放话题（有料才起）");
+    assert.match(systemsSeen[systemsSeen.length - 1]!, /Conversation topic to raise naturally/);
+    assert.doesNotMatch(topic!.prompt, /how's it going|see you around/, "注入提示不得泄题");
+
+    // 回合 2：用户产出两个目标语块 → 判分（假模型判 correct）→ 事件流 + 指标落库。
+    await postJson(`${api}/api/messages`, {
+      contact: "companion",
+      text: "pretty good! how's it going with your project? anyway I'll see you around later!",
+    });
+    const closed = db
+      .prepare("SELECT status FROM ambush_topics WHERE id = ?")
+      .get(topic!.id) as { status: string };
+    assert.equal(closed.status, "resolved", "用户回合后话题应结算关闭");
+
+    const placements = db
+      .prepare("SELECT COUNT(*) AS n FROM ambush_placements WHERE topic_id = ?")
+      .get(topic!.id) as { n: number };
+    const hits = db
+      .prepare(
+        `SELECT json_extract(payload, '$.chunkId') AS chunk_id, value
+         FROM metric_events WHERE metric_name = 'ambush-hit'
+           AND json_extract(payload, '$.topicId') = ?`,
+      )
+      .all(topic!.id) as unknown as { chunk_id: string; value: number }[];
+    assert.equal(hits.length, Number(placements.n), "每个埋伏语块各记一条命中率事件");
+    for (const chunkId of ["smoke-amb-1", "smoke-amb-2"]) {
+      const row = hits.find((h) => h.chunk_id === chunkId);
+      assert.ok(row, `语块 ${chunkId} 应有命中率事件`);
+      assert.equal(Number(row!.value), 1, "独立产出应记命中 1");
+    }
+
+    const productions = db
+      .prepare(
+        `SELECT chunk_id, event_type, assistance FROM events
+         WHERE topic_id = ? AND chunk_id IN ('smoke-amb-1', 'smoke-amb-2')
+           AND event_type != 'initial-learning'`,
+      )
+      .all(topic!.id) as unknown as { chunk_id: string; event_type: string; assistance: string | null }[];
+    assert.equal(productions.length, 2);
+    assert.ok(
+      productions.every(
+        (row) => row.event_type === "independent-production" && row.assistance === "none",
+      ),
+      "无近期暴露 → 独立产出，assistance=none（ADR-0013）",
+    );
+
+    // 抽检页可见本轮判分（传感器判分记录）。
+    const judgments = await getJson(`${api}/api/judgments?observationId=none`);
+    assert.ok(Array.isArray(judgments), "判分列表接口可用");
+
+    // 本话题已结束，下一 tick 会为其投递系统小结——把投递标记写上，
+    // 让后续「系统小结」用例只验证它自己构造的话题（各用例互不串扰）。
+    db.prepare("UPDATE ambush_topics SET digest_sent_at = ? WHERE id = ?").run(Date.now(), topic!.id);
   });
 
   await check("系统小结：话题结束后进入系统会话，角色会话零打断（issue #8）", async () => {
@@ -443,7 +546,7 @@ try {
     server = reopened;
     try {
       const messages = await getJson(`${base(reopened.port)}/api/messages?contact=companion`);
-      assert.equal(messages.length, 8, "四轮对话的消息应全部保留");
+      assert.equal(messages.length, 12, "六轮对话的消息应全部保留（含埋伏复习两轮，issue #07）");
       assert.equal(messages[1].translation, REPLY_TRANSLATION);
       const refs = await getJson(
         `${base(reopened.port)}/api/explanations?messageId=${explanationMessageId}`,

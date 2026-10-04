@@ -228,6 +228,77 @@ describe("planAmbushTopic：不泄题硬规则（ADR-0013）", () => {
   });
 });
 
+describe("openTopic：壳层运行时视图（issue #07 接线）", () => {
+  it("returns the existing open topic instead of planning a new one", () => {
+    const harness = makeHarness();
+    makeDue(harness, ["c1", "c2", "c3"]);
+    const { db, clock } = harness;
+    const ambush = openAmbush({ db, clock });
+
+    clock.set(T0 + 2 * DAY);
+    const first = ambush.openTopic("en");
+    expect(first).not.toBeNull();
+    const second = ambush.openTopic("en");
+    expect(second).not.toBeNull();
+    expect(second!.topicId).toBe(first!.topicId);
+    expect(second!.prompt).toBe(first!.prompt);
+    expect(second!.chunkIds).toEqual(first!.chunkIds);
+
+    // 未再规划：当日话题数仍为 1。
+    const rows = db
+      .prepare("SELECT COUNT(*) AS n FROM ambush_topics WHERE user_id = 'local' AND language = 'en'")
+      .get() as { n: number };
+    expect(Number(rows.n)).toBe(1);
+  });
+
+  it("returns null when nothing is due (有料才起)", () => {
+    const harness = makeHarness();
+    makeDue(harness, ["c1", "c2"]);
+    const ambush = openAmbush({ db: harness.db, clock: harness.clock });
+
+    // 预学次日才到期：当天不起。
+    expect(ambush.openTopic("en")).toBeNull();
+  });
+});
+
+describe("resolveTopic：近期暴露按语块分别判定（ADR-0013）", () => {
+  it("近期角色消息含目标形式 → 该语块辅助（hit=0），未暴露语块照常命中", async () => {
+    const harness = makeHarness();
+    makeDue(harness, ["c1", "c2"], { forms: { c1: "look for", c2: "see you around" } });
+    const { db, clock, store } = harness;
+    const ambush = openAmbush({ db, clock });
+
+    clock.set(T0 + 2 * DAY);
+    const topic = ambush.openTopic("en")!;
+    const judge = createJudge({
+      db,
+      usageJudge: fakeUsageJudge({ outcome: "correct", confidence: 0.95 }),
+    });
+    const resolved = await ambush.resolveTopic({
+      topicId: topic.topicId,
+      userText: "I look for my keys and see you around town.",
+      judge,
+      store,
+      // 近期角色消息只示范过 c2 的形式。
+      recentCompanionTexts: ["Anyway, I'll see you around!"],
+    });
+
+    const c1 = resolved.placements.find((p) => p.chunkId === "c1")!;
+    const c2 = resolved.placements.find((p) => p.chunkId === "c2")!;
+    expect(c1.outcome).toBe("hit");
+    expect(c2.outcome).toBe("missed");
+
+    const events = db
+      .prepare(
+        "SELECT event_type, assistance FROM events WHERE topic_id = ? AND chunk_id = ? AND event_type != 'initial-learning'",
+      )
+      .all(topic.topicId, "c2") as unknown as { event_type: string; assistance: string | null }[];
+    expect(events).toEqual([
+      { event_type: "assisted-production", assistance: "assisted" },
+    ]);
+  });
+});
+
 function fakeUsageJudge(verdict: UsageVerdict): UsageJudge {
   return {
     name: "fake-usage",

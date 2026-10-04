@@ -13,6 +13,7 @@ import {
   loadKnowledgeEntries,
   markTopicDigestSent,
   migrate,
+  openAmbush,
   openBootstrap,
   openContentPipeline,
   openDatabase,
@@ -37,6 +38,7 @@ import {
   type CoarseGrader,
   type Database,
   type EventStore,
+  type Judge,
   type PerishabilityTagger,
   type RssFetcher,
   type RssSubscriptions,
@@ -44,6 +46,7 @@ import {
   type Wordlist,
 } from "@lingua/core";
 import { createCompanionAgent, type CompanionAgent } from "./agent";
+import { createAmbushLoop, createDefaultJudge } from "./ambush-loop";
 import { createReadabilityExtractor } from "./content-extractor";
 import { loadConfig, resolveHome } from "./config";
 import { dataDir } from "./data-dir";
@@ -68,6 +71,8 @@ export type StartServerOptions = {
   configPath?: string;
   // 注入假模型时跳过 config.toml（e2e 冒烟用）。
   model?: LanguageModel;
+  // 判分器可注入（e2e 用假判分器避免真实 LLM）；缺省 = 规则命中 + LLM 判用法。
+  judge?: Judge;
   cardPath?: string;
   packPath?: string;
   // 内容管道依赖可注入，便于 e2e 控制。
@@ -232,7 +237,19 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
   const model = options.model ?? buildModel(options.configPath);
   // 知识条目库（issue #12）：随包种子内容，启动时加载并全量校验。
   const knowledge = openKnowledgeStore({ entries: loadKnowledgeEntries() });
-  const agent: CompanionAgent = createCompanionAgent({ model, db, clock, card, knowledge });
+  // 埋伏复习运行时接线（issue #07 壳层侧）：每轮确保开放话题并注入角色
+  // prompt；用户回合后判分结算。判分器缺省 = 规则命中 + LLM 判用法（ADR-0010）。
+  const ambush = openAmbush({ db, clock });
+  const judge = options.judge ?? createDefaultJudge(db, model);
+  const ambushLoop = createAmbushLoop({ db, clock, language, ambush, eventStore, store, judge });
+  const agent: CompanionAgent = createCompanionAgent({
+    model,
+    db,
+    clock,
+    card,
+    knowledge,
+    ambushLoop,
+  });
 
   // Bootstrap 课包（issue #6）：数据目录 bootstrap-pack.json > 显式路径 > 内置首批课包；
   // 播种幂等。课包语言须与角色目标语言一致，否则推送落不进当前系统会话。

@@ -26,7 +26,7 @@ export type ContentSimplifier = (input: {
 }) => Promise<{ title: string; body: string }>;
 
 export type IngestResult = {
-  kind: "direct" | "simplified" | "unlock_queued";
+  kind: "direct" | "simplified" | "unlock_queued" | "dismissed";
   original: {
     id: string;
     title: string | null;
@@ -54,8 +54,6 @@ export type ContentPipelineOptions = {
   hardThreshold?: Cefr;
   // 简化目标级；默认 A2。
   simplifyTargetLevel?: Cefr;
-  // 易腐内容入解锁队列后的 TTL（毫秒）；默认 7 天。
-  perishableQueueTtlMs?: number;
   coverageThreshold?: number;
   maxA1SentenceLength?: number;
 };
@@ -100,7 +98,6 @@ export function openContentPipeline(options: ContentPipelineOptions): ContentPip
   const userId = options.userId ?? "local";
   const hardThreshold = options.hardThreshold ?? "B1";
   const simplifyTargetLevel = options.simplifyTargetLevel ?? "A2";
-  const perishableQueueTtlMs = options.perishableQueueTtlMs ?? 7 * 24 * 60 * 60 * 1000;
 
   const difficulty = openDifficultyPipeline({
     wordlist,
@@ -246,11 +243,28 @@ export function openContentPipeline(options: ContentPipelineOptions): ContentPip
           },
         };
       } catch {
-        // 简化失败：避免信息丢失，降级为常青解锁队列处理（带过期）。
+        // 简化失败：按 mvp.md 规则「易腐+太难 → 改写版，不进解锁队列」字面执行——
+        // 搁置原文（留档不丢），不进队列、不设过期。unlock-queue 的过期机制
+        // 保留给模块自身与未来入口，管道不再喂入易腐条目。
+        createContentRow({
+          id: originalId,
+          sourceUrl: input.sourceUrl,
+          title: input.title ?? null,
+          body: input.body,
+          difficultyScore: coverage,
+          cefrEstimate: level,
+          perishability,
+          unlockLevel: null,
+          pipelineStatus: "dismissed",
+          expiresAt: null,
+          simplifiedSourceId: null,
+          feedId: input.feedId ?? null,
+          audioUrl: input.audioUrl ?? null,
+        });
+        return { ...baseResult, kind: "dismissed" };
       }
     }
 
-    const expiresAt = perishability === "perishable" ? clock.now() + perishableQueueTtlMs : null;
     createContentRow({
       id: originalId,
       sourceUrl: input.sourceUrl,
@@ -261,12 +275,12 @@ export function openContentPipeline(options: ContentPipelineOptions): ContentPip
       perishability,
       unlockLevel: level,
       pipelineStatus: "unlock_queued",
-      expiresAt,
+      expiresAt: null,
       simplifiedSourceId: null,
       feedId: input.feedId ?? null,
       audioUrl: input.audioUrl ?? null,
     });
-    unlockQueue.add(originalId, { unlockLevel: level, expiresAt });
+    unlockQueue.add(originalId, { unlockLevel: level, expiresAt: null });
 
     return {
       ...baseResult,

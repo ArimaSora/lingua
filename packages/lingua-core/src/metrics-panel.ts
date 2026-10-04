@@ -1,5 +1,7 @@
 import type { Clock } from "./clock";
 import type { Database } from "./database";
+import { DAY_MS, dayStart } from "./day";
+import { APP_OPEN_METRIC, AMBUSH_HIT_METRIC, TOPIC_RESPONSE_METRIC } from "./metrics";
 import { admittedEvents } from "./projection";
 import { DEFAULT_PFA_PARAMS, pfaMastery } from "./pfa";
 import type { PfaParams } from "./pfa";
@@ -12,7 +14,6 @@ import type { PfaParams } from "./pfa";
 
 const DEFAULT_WINDOW_DAYS = 28;
 const MASTERY_SERIES_DAYS = 7;
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 export type MasteryPoint = {
   date: string; // YYYY-MM-DD
@@ -39,10 +40,6 @@ export type MetricsPanelInput = {
   userId?: string;
   windowDays?: number;
 };
-
-function dayStart(ms: number): number {
-  return Math.floor(ms / DAY_MS) * DAY_MS;
-}
 
 function isoDate(ms: number): string {
   return new Date(ms).toISOString().slice(0, 10);
@@ -173,11 +170,11 @@ export function queryMetricsPanel(input: MetricsPanelInput): MetricsPanel {
 
   return {
     language,
-    ambushHitRate: metricRate(db, "ambush-hit", userId, language, windowStart),
-    topicResponseRate: metricRate(db, "topic-response", userId, language, windowStart),
+    ambushHitRate: metricRate(db, AMBUSH_HIT_METRIC, userId, language, windowStart),
+    topicResponseRate: metricRate(db, TOPIC_RESPONSE_METRIC, userId, language, windowStart),
     masterySeries: buildMasterySeries(db, params, todayStart, language),
     retention: computeRetention(
-      activeDaySet(db, "app-open", userId, language, windowStart),
+      activeDaySet(db, APP_OPEN_METRIC, userId, language, windowStart),
       todayStart,
       windowStart,
     ),

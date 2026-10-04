@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { openDatabase, migrate, FakeClock } from "../src/index";
+import { openDatabase, migrate, FakeClock, openUnlockQueue } from "../src/index";
 import { openContentPipeline, type ContentExtractor, type ContentSimplifier } from "../src/content-pipeline";
 import type { Cefr } from "../src/bootstrap-pack";
 import type { Wordlist } from "../src/difficulty";
@@ -103,7 +103,7 @@ describe("内容管道：链接 → 抓取 → 难度评估 → 分流", () => {
     expect(queue[0]!.unlockLabel).toBe("原文难度约 C1");
   });
 
-  it("简化器失败时易腐难文降级为进解锁队列并设过期", async () => {
+  it("简化器失败时易腐难文按规则搁置，不进解锁队列", async () => {
     const { db, clock } = setup();
     const body = "Government increase substantial however ubiquitous.";
     const pipeline = openContentPipeline({
@@ -118,29 +118,37 @@ describe("内容管道：链接 → 抓取 → 难度评估 → 分流", () => {
     });
 
     const result = await pipeline.ingest({ url: "https://news.example.com/2026/10/03/agent-release" });
-    expect(result.kind).toBe("unlock_queued");
+    expect(result.kind).toBe("dismissed");
     expect(result.perishability).toBe("perishable");
+    expect(pipeline.listUnlockQueue()).toHaveLength(0);
 
-    const queue = pipeline.listUnlockQueue();
-    expect(queue).toHaveLength(1);
-    expect(queue[0]!.expiresAt).toBeGreaterThan(clock.now());
+    const row = db
+      .prepare("SELECT pipeline_status FROM content_items WHERE id = ?")
+      .get(result.original.id) as { pipeline_status: string };
+    expect(row.pipeline_status).toBe("dismissed");
   });
 
   it("过期清理只删 unlock queue 中超时的易腐条目", async () => {
     const { db, clock } = setup();
-    const body = "Government increase substantial however ubiquitous.";
+    // 管道不再喂入易腐条目（简化失败即搁置），这里直接经 unlock-queue 模块
+    // 构造带过期的易腐队列项，验证管道暴露的 expireUnlockQueue 接线。
+    db.prepare(
+      `INSERT INTO content_items (id, user_id, language, source_url, body, perishability, created_at)
+       VALUES ('item-1', 'local', 'en', 'https://news.example.com/a', 'body', 'perishable', ?)`,
+    ).run(clock.now());
+    openUnlockQueue({ db, clock, userId: "local", language: "en" }).add("item-1", {
+      unlockLevel: "C1",
+      expiresAt: clock.now() + 60_000,
+    });
+    const body = "The cat is big.";
     const pipeline = openContentPipeline({
       db,
       clock,
       language: "en",
       extractor: createExtractor(body),
-      simplifier: async () => {
-        throw new Error("model unavailable");
-      },
+      simplifier: createSimplifier(),
       wordlist: fakeWordlist(),
     });
-
-    await pipeline.ingest({ url: "https://news.example.com/2026/10/03/agent-release" });
     expect(pipeline.listUnlockQueue()).toHaveLength(1);
 
     clock.advance(8 * 24 * 60 * 60 * 1000); // 8 天后

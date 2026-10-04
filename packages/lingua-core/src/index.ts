@@ -12,6 +12,22 @@ export {
   SEED_EXIT_COMPLETED_REVIEWS,
 } from "./admission";
 export type { Admission, AdmissionOptions, AdmissionPeriod, QuotaAccount } from "./admission";
+export {
+  AMBUSH_REPEAT_WINDOW_MS,
+  MAX_AMBUSH_CHUNKS,
+  MAX_BURIALS_IN_WINDOW,
+  MAX_TOPICS_PER_DAY,
+  openAmbush,
+  STALE_TOPIC_MS,
+} from "./ambush";
+export type {
+  Ambush,
+  AmbushOptions,
+  AmbushTopicPlan,
+  OpenTopic,
+  ResolvedPlacement,
+  ResolvedTopic,
+} from "./ambush";
 export { restoreBackup, runBackup } from "./backup";
 export type { BackupOptions, BackupResult, RestoreOptions } from "./backup";
 export {
@@ -141,21 +157,6 @@ export type {
   MessageStore,
   MessageStoreOptions,
 } from "./message-store";
-export {
-  AMBUSH_REPEAT_WINDOW_MS,
-  MAX_AMBUSH_CHUNKS,
-  MAX_BURIALS_IN_WINDOW,
-  MAX_TOPICS_PER_DAY,
-  openAmbush,
-  STALE_TOPIC_MS,
-} from "./ambush";
-export type {
-  Ambush,
-  AmbushOptions,
-  AmbushTopicPlan,
-  ResolvedPlacement,
-  ResolvedTopic,
-} from "./ambush";
 export { buildJudgePrompt, createJudge } from "./judge";
 export type {
   Judge,
@@ -167,6 +168,8 @@ export type {
   UsageJudgeInput,
   UsageVerdict,
 } from "./judge";
+export { AMBUSH_HIT_METRIC, APP_OPEN_METRIC, recordMetric, TOPIC_RESPONSE_METRIC } from "./metrics";
+export type { MetricInput, MetricName } from "./metrics";
 export { queryMetricsPanel } from "./metrics-panel";
 export type {
   MasteryPoint,
@@ -174,11 +177,20 @@ export type {
   MetricsPanelInput,
   RetentionMetrics,
 } from "./metrics-panel";
-export { AMBUSH_HIT_METRIC, APP_OPEN_METRIC, recordMetric, TOPIC_RESPONSE_METRIC } from "./metrics";
-export type { MetricInput, MetricName } from "./metrics";
 export { DEFAULT_PFA_PARAMS, pfaMastery } from "./pfa";
 export type { PfaParams } from "./pfa";
 export type { ChunkMastery, Projection, ProjectionMode, SkillMastery } from "./projection";
+export { openRssSubscriptions, parseRssFeed } from "./rss-subscriptions";
+export type {
+  FeedKind,
+  RssEntry,
+  RssFetcher,
+  RssParser,
+  RssPollReport,
+  RssSubscriptions,
+  RssSubscriptionsOptions,
+  StoredFeed,
+} from "./rss-subscriptions";
 export {
   acceptScaffoldingSuggestion,
   clearTemporaryScaffoldingTier,
@@ -211,17 +223,6 @@ export type {
   ScaffoldingTier,
   ScaffoldingTierSource,
 } from "./scaffolding";
-export { openRssSubscriptions, parseRssFeed } from "./rss-subscriptions";
-export type {
-  FeedKind,
-  RssEntry,
-  RssFetcher,
-  RssParser,
-  RssPollReport,
-  RssSubscriptions,
-  RssSubscriptionsOptions,
-  StoredFeed,
-} from "./rss-subscriptions";
 export { openScheduler } from "./scheduler";
 export type { Scheduler, SchedulerOptions, SchedulerTask, TaskError, TickReport } from "./scheduler";
 export {

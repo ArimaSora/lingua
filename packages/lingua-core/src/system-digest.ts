@@ -1,5 +1,6 @@
 import type { Clock } from "./clock";
 import type { Database } from "./database";
+import { DAY_MS, dayStart } from "./day";
 import { listTopicErrors } from "./error-log";
 import { projectState } from "./projection";
 
@@ -53,8 +54,7 @@ function isoDate(ms: number): string {
 }
 
 function tomorrowStart(now: number): number {
-  const day = 24 * 60 * 60 * 1000;
-  return Math.floor(now / day) * day + day;
+  return dayStart(now) + DAY_MS;
 }
 
 function isTopicEnded(row: TopicRow, now: number): boolean {
@@ -88,7 +88,7 @@ function renderScoringReview(placements: PlacementRow[]): string {
 function renderDueForecast(db: Database, now: number, language: string): string {
   const projection = projectState(db, "current-belief", now, language);
   const tomorrow = tomorrowStart(now);
-  const nextDay = tomorrow + 24 * 60 * 60 * 1000;
+  const nextDay = tomorrow + DAY_MS;
   const dueTomorrow = projection.chunks.filter(
     (chunk) => chunk.dueAt !== null && chunk.dueAt >= tomorrow && chunk.dueAt < nextDay,
   ).length;

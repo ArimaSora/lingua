@@ -1,5 +1,6 @@
 import type { Clock } from "./clock";
 import type { Database } from "./database";
+import { DAY_MS, dayStart } from "./day";
 import type { EventStore } from "./event-store";
 import { recordErrorLog } from "./error-log";
 import type { Judge, JudgeRequest, JudgeVerdict } from "./judge";
@@ -34,6 +35,15 @@ export type ResolvedPlacement = {
   verdict: JudgeVerdict;
 };
 
+// 壳层运行时接线用的开放话题视图（issue #07）：只含注入 prompt 与判分所需
+// 的标识，不含场景细节（场景只在规划时用）。
+export type OpenTopic = {
+  topicId: string;
+  topicText: string;
+  prompt: string;
+  chunkIds: string[];
+};
+
 export type ResolvedTopic = {
   topicId: string;
   status: "resolved" | "stale";
@@ -48,12 +58,18 @@ export type AmbushOptions = {
 
 export type Ambush = {
   planAmbushTopic(language: string): AmbushTopicPlan | null;
+  // 取当前开放话题（无则尝试规划；配额用尽或无候选时返回 null）。
+  // 壳层每轮对话调用一次，把 prompt 注入角色 system prompt。
+  openTopic(language: string): OpenTopic | null;
   resolveTopic(input: {
     topicId: string;
     userText: string;
     judge: Judge;
     store: EventStore;
     exposedRecently?: boolean;
+    // 近期角色消息原文（确定性暴露规则的输入，ADR-0013）：任一目标语块形式
+    // 出现在这些文本中即视为该语块近期被示范（辅助），按语块分别判定。
+    recentCompanionTexts?: string[];
   }): Promise<ResolvedTopic>;
 };
 
@@ -74,6 +90,7 @@ type TopicRow = {
   language: string;
   status: string;
   opened_at: number;
+  topic_text: string;
 };
 
 type PlacementRow = {
@@ -91,10 +108,6 @@ function parseVariants(variants: string): string[] {
   } catch {
     return [];
   }
-}
-
-function dayStart(ms: number): number {
-  return Math.floor(ms / (24 * 60 * 60 * 1000)) * 24 * 60 * 60 * 1000;
 }
 
 function formsOf(chunk: ChunkRow): string[] {
@@ -133,8 +146,12 @@ export function openAmbush(options: AmbushOptions): Ambush {
     `INSERT INTO ambush_placements (id, user_id, language, topic_id, chunk_id, buried_at, resolved_at, outcome)
      VALUES (?, ?, ?, ?, ?, ?, NULL, NULL)`,
   );
+  const getLatestOpenTopic = db.prepare(
+    "SELECT id, topic_text, prompt FROM ambush_topics WHERE user_id = ? AND language = ? AND status = 'open' ORDER BY opened_at DESC LIMIT 1",
+  );
+
   const getTopic = db.prepare(
-    "SELECT id, language, status, opened_at FROM ambush_topics WHERE id = ? AND user_id = ?",
+    "SELECT id, language, status, opened_at, topic_text FROM ambush_topics WHERE id = ? AND user_id = ?",
   );
   const listTopicPlacements = db.prepare(
     "SELECT id, topic_id, chunk_id, buried_at, resolved_at, outcome FROM ambush_placements WHERE topic_id = ? AND user_id = ?",
@@ -185,7 +202,7 @@ export function openAmbush(options: AmbushOptions): Ambush {
 
   function sameDayTopicCount(language: string, now: number): number {
     const start = dayStart(now);
-    const end = start + 24 * 60 * 60 * 1000;
+    const end = start + DAY_MS;
     const row = listSameDayTopics.get(userId, language, start, end) as { n: number } | undefined;
     // sqlite COUNT(*) returns bigint via DatabaseSync; coerce.
     return row ? Number(row.n) : 0;
@@ -301,14 +318,49 @@ export function openAmbush(options: AmbushOptions): Ambush {
     };
   }
 
+  function wasExposed(chunkId: string, recentCompanionTexts: string[]): boolean {
+    if (recentCompanionTexts.length === 0) return false;
+    const chunk = getChunk.get(chunkId, userId) as ChunkRow | undefined;
+    if (!chunk) return false;
+    return recentCompanionTexts.some((text) => containsAny(text, formsOf(chunk)));
+  }
+
+  function openTopic(language: string): OpenTopic | null {
+    const now = clock.now();
+    closeStaleTopics(language, now);
+    const row = getLatestOpenTopic.get(userId, language) as
+      | { id: string; topic_text: string; prompt: string }
+      | undefined;
+    if (row) {
+      const placements = listTopicPlacements.all(row.id, userId) as unknown as PlacementRow[];
+      return {
+        topicId: row.id,
+        topicText: row.topic_text,
+        prompt: row.prompt,
+        chunkIds: placements.map((placement) => placement.chunk_id),
+      };
+    }
+    const plan = planAmbushTopic(language);
+    if (!plan) return null;
+    return {
+      topicId: plan.topicId,
+      topicText: plan.topicText,
+      prompt: plan.prompt,
+      chunkIds: plan.chunkIds,
+    };
+  }
+
   async function resolveTopic(input: {
     topicId: string;
     userText: string;
     judge: Judge;
     store: EventStore;
     exposedRecently?: boolean;
+    // 近期角色消息原文（确定性暴露规则的输入，ADR-0013）：任一目标语块形式
+    // 出现在这些文本中即视为该语块近期被示范（辅助），按语块分别判定。
+    recentCompanionTexts?: string[];
   }): Promise<ResolvedTopic> {
-    const { topicId, userText, judge, store, exposedRecently = false } = input;
+    const { topicId, userText, judge, store, exposedRecently = false, recentCompanionTexts } = input;
     const now = clock.now();
     const topic = getTopic.get(topicId, userId) as TopicRow | undefined;
     if (!topic) throw new Error(`unknown topic: ${topicId}`);
@@ -317,14 +369,16 @@ export function openAmbush(options: AmbushOptions): Ambush {
     const placements = listTopicPlacements.all(topicId, userId) as unknown as PlacementRow[];
     const targets = placements.map((placement) => ({
       chunkId: placement.chunk_id,
-      // v1：近期是否暴露由调用方（壳层）根据近期消息维护；核心默认 false。
-      exposedRecently,
+      // 暴露 = 调用方标记 OR 近几轮角色消息中出现过该语块任一形式（ADR-0013，
+      // 确定性规则在核心内判定，按语块分别计）。
+      exposedRecently:
+        exposedRecently || wasExposed(placement.chunk_id, recentCompanionTexts ?? []),
     }));
 
     const request: JudgeRequest = {
       userText,
       targets,
-      topicText: topic.language,
+      topicText: topic.topic_text,
     };
     const verdicts = targets.length > 0 ? await judge.judge(request) : [];
 
@@ -335,8 +389,9 @@ export function openAmbush(options: AmbushOptions): Ambush {
       if (!verdict) {
         throw new Error(`missing verdict for chunk ${placement.chunk_id}`);
       }
+      const target = targets.find((t) => t.chunkId === placement.chunk_id)!;
       const outcome: "hit" | "missed" =
-        verdict.outcome === "correct" && !exposedRecently ? "hit" : "missed";
+        verdict.outcome === "correct" && !target.exposedRecently ? "hit" : "missed";
       updatePlacement.run(now, outcome, placement.id);
 
       if (verdict.outcome === "not-produced") {
@@ -354,7 +409,7 @@ export function openAmbush(options: AmbushOptions): Ambush {
           observationId,
           chunkId: placement.chunk_id,
           outcome: verdict.outcome,
-          assistance: exposedRecently ? "assisted" : "none",
+          assistance: target.exposedRecently ? "assisted" : "none",
           confidence: verdict.confidence,
           quote: verdict.quote,
           topicId,
@@ -408,5 +463,5 @@ export function openAmbush(options: AmbushOptions): Ambush {
     return { topicId, status, placements: resolved };
   }
 
-  return { planAmbushTopic, resolveTopic };
+  return { planAmbushTopic, openTopic, resolveTopic };
 }

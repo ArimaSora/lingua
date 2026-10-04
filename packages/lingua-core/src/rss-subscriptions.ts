@@ -180,6 +180,10 @@ function formatRssPush(params: {
     return `【订阅更新】${headline}\n已收入解锁队列，${result.unlockLabel ?? `原文难度约 ${result.level}`}。\n原文链接：${sourceUrl}`;
   }
 
+  if (result.kind === "dismissed") {
+    return `【订阅更新】${headline}\n这篇时效性内容太难，改写失败，按规则不进解锁队列，先搁置。\n原文链接：${sourceUrl}`;
+  }
+
   return [
     `【订阅更新】${headline}`,
     `原文链接：${sourceUrl}`,

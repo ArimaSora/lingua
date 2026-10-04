@@ -32,6 +32,8 @@ import {
 // 前端据此渲染可展开折叠（仅 full-support 档要求模型输出该标记）。
 export const TRANSLATION_MARKER = "[[翻译]]";
 
+export const TOPIC_PROMPT_SECTION = "Conversation topic to raise naturally";
+
 export function splitCompanionText(raw: string): { text: string; translation: string | null } {
   const index = raw.indexOf(TRANSLATION_MARKER);
   if (index === -1) return { text: raw.trim(), translation: null };
@@ -70,8 +72,11 @@ export function buildCompanionPrompt(options: {
   policy: ScaffoldingPolicy;
   digestText: string;
   knowledgeCatalog?: KnowledgeCatalogItem[];
+  // 埋伏话题生成提示（issue #07）：来自 lingua-core 的不泄题提示，角色据此
+  // 自然起话题；null 表示本轮无话题。
+  topicPrompt?: string | null;
 }): string {
-  const { card, tier, policy, digestText, knowledgeCatalog = [] } = options;
+  const { card, tier, policy, digestText, knowledgeCatalog = [], topicPrompt = null } = options;
   const registerRange = effectiveRegisterRange(tier, card.registerRange);
   const lines = [
     `You are ${card.name}, the user's close friend — not a tutor, not an assistant.`,
@@ -104,6 +109,13 @@ export function buildCompanionPrompt(options: {
       digestText,
     );
   }
+  if (topicPrompt) {
+    lines.push(
+      "",
+      `${TOPIC_PROMPT_SECTION} (weave it in like a friend would; do not mention it is an exercise; do not reveal or translate the target expressions):`,
+      topicPrompt,
+    );
+  }
   lines.push(...buildKnowledgeSection(knowledgeCatalog));
   lines.push(
     "",
@@ -126,6 +138,8 @@ export type CompanionAgentDeps = {
   clock: Clock;
   card: CharacterCard;
   knowledge: KnowledgeStore;
+  // 埋伏复习接线（issue #07）：结算用户回合 + 提供本轮话题注入提示。
+  ambushLoop?: import("./ambush-loop").AmbushLoop;
 };
 
 export function createCompanionAgent(deps: CompanionAgentDeps): CompanionAgent {
@@ -153,15 +167,21 @@ export function createCompanionAgent(deps: CompanionAgentDeps): CompanionAgent {
     async reply(userText) {
       messages.append({ language, contact: "companion", role: "user", text: userText });
 
+      // 先结算用户回合（对开场时开放的话题判分）——暴露检测只看本轮之前的
+      // 角色消息；判分失败不阻断对话（ambush-loop 内部已吞掉传感器故障）。
+      await deps.ambushLoop?.settleUserTurn(userText);
+
       const { tier: effectiveTier } = getScaffoldingTier({ db, clock, language });
       const policy = scaffoldingPolicy(effectiveTier);
       const digest = renderDigest({ db, clock, language, tier: effectiveTier });
+      const topicPrompt = deps.ambushLoop?.topicPromptForTurn() ?? null;
       const system = buildCompanionPrompt({
         card,
         tier: effectiveTier,
         policy,
         digestText: digest.text,
         knowledgeCatalog: catalog,
+        topicPrompt,
       });
       const history = messages
         .list({ language, contact: "companion", limit: HISTORY_LIMIT })

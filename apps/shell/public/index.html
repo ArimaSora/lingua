@@ -170,6 +170,7 @@
     border-radius: 2px;
     min-height: 2px;
   }
+  .bubble audio { display: block; max-width: 100%; margin: 6px 0; }
 </style>
 </head>
 <body>
@@ -255,6 +256,29 @@
   const CORRECTION_OPEN = "[[纠错]]";
   const CORRECTION_CLOSE = "[[/纠错]]";
 
+  // RSS/播客推送的音频标记（issue #11）：服务端把 <audio> 标签写进推送文本，
+  // 前端只认这个受控形状，用 DOM API 换成真实 audio 元素（不走 innerHTML，
+  // URL 进属性而非 HTML 解析，避免注入）。
+  const AUDIO_TAG_RE = /<audio\b[^>]*>/i;
+
+  function appendTextWithAudio(bubble, text) {
+    const match = AUDIO_TAG_RE.exec(text);
+    if (!match) {
+      bubble.textContent = text;
+      return;
+    }
+    const before = text.slice(0, match.index).trim();
+    const after = text.slice(match.index + match[0].length).trim();
+    const src = /src="([^"]*)"/.exec(match[0])?.[1] ?? "";
+    if (before) bubble.appendChild(document.createTextNode(before));
+    const audio = document.createElement("audio");
+    if (src) audio.src = src;
+    audio.controls = true;
+    audio.preload = "none";
+    bubble.appendChild(audio);
+    if (after) bubble.appendChild(document.createTextNode(after));
+  }
+
   function appendTextWithPrelearning(bubble, text) {
     const openIndex = text.indexOf(PRELEARNING_OPEN);
     const closeIndex = text.indexOf(PRELEARNING_CLOSE);
@@ -329,7 +353,9 @@
     row.className = `row ${message.role}`;
     const bubble = document.createElement("div");
     bubble.className = "bubble";
-    if (message.annotations && message.annotations.length > 0) {
+    if (message.text.includes("<audio")) {
+      appendTextWithAudio(bubble, message.text);
+    } else if (message.annotations && message.annotations.length > 0) {
       appendAnnotatedText(bubble, message.text, message.annotations);
     } else {
       appendTextWithCorrection(bubble, message.text);

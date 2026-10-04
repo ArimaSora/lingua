@@ -12,6 +12,7 @@ import {
   parseScaffoldingTier,
   rejectScaffoldingSuggestion,
   scaffoldingPolicyDescription,
+  SCAFFOLDING_TIERS,
   setScaffoldingTier,
   type Bootstrap,
   type Clock,
@@ -129,12 +130,11 @@ export function handleSystemMessage(input: {
   const normalized = input.text.trim().toLowerCase();
   if (normalized === "临时下调" || normalized === "临时下调一档" || normalized === "temporary down") {
     const current = getScaffoldingTier({ db, clock, language }).tier;
-    const order: ScaffoldingTier[] = ["full-support", "on-request", "clarify-only", "target-only"];
-    const index = order.indexOf(current);
-    if (index >= order.length - 1) {
+    const index = SCAFFOLDING_TIERS.indexOf(current);
+    if (index >= SCAFFOLDING_TIERS.length - 1) {
       return { reply: "已经是最低支架档（target-only），无法再下调。", skipSuggestion: true };
     }
-    const tier = order[index + 1]!;
+    const tier = SCAFFOLDING_TIERS[index + 1]!;
     setScaffoldingTier({ db, clock, language, tier, temporary: true });
     return { reply: `已将母语支架临时下调一档至 ${tierLabel(tier)}（24 小时内有效）。`, skipSuggestion: true };
   }
@@ -213,6 +213,9 @@ export function formatIngestReply(result: Awaited<ReturnType<ContentPipeline["in
   }
   if (result.kind === "unlock_queued") {
     return `已收入解锁队列，${result.unlockLabel}。等你的水平到位后会主动推送。`;
+  }
+  if (result.kind === "dismissed") {
+    return `这篇时效性内容太难，改写又没成功，按规则不进解锁队列，先搁置。原文链接：${result.original.sourceUrl}`;
   }
   return `已收到链接，难度约 ${result.level}，可直接阅读。`;
 }
