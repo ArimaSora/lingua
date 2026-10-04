@@ -2,7 +2,7 @@ import { DatabaseSync } from "node:sqlite";
 
 export type Database = DatabaseSync;
 
-export const SCHEMA_VERSION = 8;
+export const SCHEMA_VERSION = 12;
 
 export function openDatabase(path: string): Database {
   const db = new DatabaseSync(path);
@@ -31,7 +31,7 @@ type Migration = {
 // 供「不泄题」规则审计。
 // 全部按语言隔离，user_id 预留。
 // 版本号占位协调：v5 归票 06（并发施工）；v6 归票 12；v7 归本票（issue #7）；
-// v8 归票 10（并发施工）。
+// v8 归票 10（并发施工）；v12 归票 14（验证面板指标查询索引）。
 const MIGRATIONS: Migration[] = [
   {
     version: 1,
@@ -333,6 +333,14 @@ const MIGRATIONS: Migration[] = [
         CHECK (pipeline_status IN ('inbox','unlock_queued','simplified','dismissed'));
       CREATE INDEX idx_content_items_pipeline_status
         ON content_items (user_id, language, pipeline_status, created_at);
+    `,
+  },
+  {
+    version: 12,
+    // 验证面板（issue #14）：指标事件表已有，加复合索引支撑面板查询。
+    sql: `
+      CREATE INDEX idx_metric_events_lookup
+        ON metric_events (user_id, language, metric_name, created_at);
     `,
   },
 ];

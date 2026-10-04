@@ -164,7 +164,14 @@ export type {
   UsageJudgeInput,
   UsageVerdict,
 } from "./judge";
-export { AMBUSH_HIT_METRIC, recordMetric, TOPIC_RESPONSE_METRIC } from "./metrics";
+export { queryMetricsPanel } from "./metrics-panel";
+export type {
+  MasteryPoint,
+  MetricsPanel,
+  MetricsPanelInput,
+  RetentionMetrics,
+} from "./metrics-panel";
+export { AMBUSH_HIT_METRIC, APP_OPEN_METRIC, recordMetric, TOPIC_RESPONSE_METRIC } from "./metrics";
 export type { MetricInput, MetricName } from "./metrics";
 export { DEFAULT_PFA_PARAMS, pfaMastery } from "./pfa";
 export type { PfaParams } from "./pfa";
