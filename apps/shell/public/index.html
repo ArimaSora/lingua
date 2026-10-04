@@ -107,6 +107,13 @@
     color: var(--muted);
   }
   .bubble summary { cursor: pointer; user-select: none; outline: none; }
+  .register {
+    border-bottom: 2px dotted;
+    cursor: help;
+  }
+  .register-casual { border-color: #f59e0b; }
+  .register-neutral { border-color: #9ca3af; }
+  .register-formal { border-color: #3b82f6; }
   #composer {
     display: flex;
     gap: 10px;
@@ -231,6 +238,25 @@
     bubble.append(beforeEl, details, afterEl);
   }
 
+  function appendAnnotatedText(bubble, text, annotations) {
+    const sorted = [...annotations].sort((a, b) => a.start - b.start);
+    let cursor = 0;
+    for (const annotation of sorted) {
+      if (annotation.start > cursor) {
+        bubble.appendChild(document.createTextNode(text.slice(cursor, annotation.start)));
+      }
+      const span = document.createElement("span");
+      span.className = `register register-${annotation.register}`;
+      span.title = annotation.label;
+      span.textContent = text.slice(annotation.start, annotation.end);
+      bubble.appendChild(span);
+      cursor = annotation.end;
+    }
+    if (cursor < text.length) {
+      bubble.appendChild(document.createTextNode(text.slice(cursor)));
+    }
+  }
+
   function renderMessage(message) {
     if (renderedIds.has(message.id)) return;
     renderedIds.add(message.id);
@@ -238,7 +264,11 @@
     row.className = `row ${message.role}`;
     const bubble = document.createElement("div");
     bubble.className = "bubble";
-    appendTextWithPrelearning(bubble, message.text);
+    if (message.annotations && message.annotations.length > 0) {
+      appendAnnotatedText(bubble, message.text, message.annotations);
+    } else {
+      appendTextWithPrelearning(bubble, message.text);
+    }
     if (message.translation) {
       // 可展开中文翻译（A1–A2 支架档）：默认折叠，点开即读。
       const details = document.createElement("details");

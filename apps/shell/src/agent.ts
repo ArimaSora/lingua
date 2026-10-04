@@ -1,11 +1,14 @@
 import { generateText, jsonSchema, stepCountIs, tool, type LanguageModel } from "ai";
 import {
   addRelationshipFact,
+  effectiveRegisterRange,
+  getScaffoldingTier,
   openExplanationLog,
   openMessageStore,
   renderDigest,
   renderExplanation,
   scaffoldingPolicy,
+  splitRegisterAnnotations,
   type CharacterCard,
   type ChatMessage,
   type Clock,
@@ -14,7 +17,9 @@ import {
   type ExplanationLayer,
   type KnowledgeCatalogItem,
   type KnowledgeStore,
+  type Register,
   type ScaffoldingPolicy,
+  type ScaffoldingTier,
 } from "@lingua/core";
 
 // 好友角色 agent loop（issue #5）：Web Chat 直连，无渠道抽象层（ADR-0017）。
@@ -61,11 +66,13 @@ function buildKnowledgeSection(catalog: KnowledgeCatalogItem[]): string[] {
 
 export function buildCompanionPrompt(options: {
   card: CharacterCard;
+  tier: ScaffoldingTier;
   policy: ScaffoldingPolicy;
   digestText: string;
   knowledgeCatalog?: KnowledgeCatalogItem[];
 }): string {
-  const { card, policy, digestText, knowledgeCatalog = [] } = options;
+  const { card, tier, policy, digestText, knowledgeCatalog = [] } = options;
+  const registerRange = effectiveRegisterRange(tier, card.registerRange);
   const lines = [
     `You are ${card.name}, the user's close friend — not a tutor, not an assistant.`,
     "",
@@ -74,12 +81,16 @@ export function buildCompanionPrompt(options: {
     "How you talk:",
     "- Chat in English. The user is a native Chinese speaker learning English from zero.",
     "- Internet-chat style: short messages, casual, one thought per message. Never lecture.",
-    `- Register: stay between ${card.registerRange.from} and ${card.registerRange.to}.`,
+    `- Register: stay between ${registerRange.from} and ${registerRange.to}.`,
     `- ${RESCUE_LINES[policy.l1Rescue]}`,
   ];
   if (card.interests.length > 0) {
     lines.push(`- Shared interests you both like talking about: ${card.interests.join(", ")}.`);
   }
+  lines.push(
+    "",
+    "Register annotations (issue #13): when you use an expression at the casual or formal end of the range, annotate it with `[[register:<casual|neutral|formal>]]` right before the expression and `[[register:neutral]]` right after. The reader will see a register hint like \"这句很口语\". Do not include the annotation markers in the Chinese translation.",
+  );
   if (policy.attachL1Translation) {
     lines.push(
       "",
@@ -142,10 +153,12 @@ export function createCompanionAgent(deps: CompanionAgentDeps): CompanionAgent {
     async reply(userText) {
       messages.append({ language, contact: "companion", role: "user", text: userText });
 
-      const policy = scaffoldingPolicy(card.scaffoldingTier);
-      const digest = renderDigest({ db, clock, language });
+      const { tier: effectiveTier } = getScaffoldingTier({ db, clock, language });
+      const policy = scaffoldingPolicy(effectiveTier);
+      const digest = renderDigest({ db, clock, language, tier: effectiveTier });
       const system = buildCompanionPrompt({
         card,
+        tier: effectiveTier,
         policy,
         digestText: digest.text,
         knowledgeCatalog: catalog,
@@ -204,12 +217,14 @@ export function createCompanionAgent(deps: CompanionAgentDeps): CompanionAgent {
       });
 
       const { text, translation } = splitCompanionText(result.text);
+      const { text: cleanText, annotations } = splitRegisterAnnotations(text);
       const replyMessage = messages.append({
         language,
         contact: "companion",
         role: "assistant",
-        text,
+        text: cleanText,
         translation: policy.attachL1Translation ? translation : null,
+        annotations,
       });
       if (delivered.length > 0) {
         const log = openExplanationLog({ db, clock });
