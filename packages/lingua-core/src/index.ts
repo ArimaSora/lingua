@@ -95,6 +95,8 @@ export type {
 } from "./difficulty";
 export { renderDigest } from "./digest";
 export type { Digest, DigestOptions } from "./digest";
+export { countTopicErrors, listTopicErrors, recordErrorLog } from "./error-log";
+export type { ErrorLogEntry, RecordErrorLogInput } from "./error-log";
 export { openExplanationLog } from "./explanation-log";
 export type { ExplanationLog, ExplanationLogOptions, ExplanationRef } from "./explanation-log";
 export { defaultParams, openEventStore } from "./event-store";
@@ -212,5 +214,14 @@ export type {
 } from "./rss-subscriptions";
 export { openScheduler } from "./scheduler";
 export type { Scheduler, SchedulerOptions, SchedulerTask, TaskError, TickReport } from "./scheduler";
+export {
+  CORRECTION_CLOSE,
+  CORRECTION_OPEN,
+  ERROR_DIGEST_THRESHOLD,
+  markTopicDigestSent,
+  renderPendingSystemDigests,
+  TOPIC_IDLE_MS,
+} from "./system-digest";
+export type { RenderSystemDigestsOptions, SystemDigest } from "./system-digest";
 export { openUnlockQueue } from "./unlock-queue";
 export type { UnlockQueue, UnlockQueueItem, UnlockQueueOptions } from "./unlock-queue";

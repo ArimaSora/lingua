@@ -214,6 +214,11 @@
   const PRELEARNING_OPEN = "[[预学清单]]";
   const PRELEARNING_CLOSE = "[[/预学清单]]";
 
+  // 系统小结的留白式纠错标记（issue #8）：折叠时只给现象（首行），
+  // 点开才看参考答案（其余行）——纠错本身也是提取练习。
+  const CORRECTION_OPEN = "[[纠错]]";
+  const CORRECTION_CLOSE = "[[/纠错]]";
+
   function appendTextWithPrelearning(bubble, text) {
     const openIndex = text.indexOf(PRELEARNING_OPEN);
     const closeIndex = text.indexOf(PRELEARNING_CLOSE);
@@ -230,6 +235,30 @@
     const details = document.createElement("details");
     const summary = document.createElement("summary");
     summary.textContent = lines[0] || "预学清单";
+    const body = document.createElement("div");
+    body.textContent = lines.slice(1).join("\n");
+    details.append(summary, body);
+    const afterEl = document.createElement("div");
+    afterEl.textContent = after;
+    bubble.append(beforeEl, details, afterEl);
+  }
+
+  function appendTextWithCorrection(bubble, text) {
+    const openIndex = text.indexOf(CORRECTION_OPEN);
+    const closeIndex = text.indexOf(CORRECTION_CLOSE);
+    if (openIndex === -1 || closeIndex <= openIndex) {
+      appendTextWithPrelearning(bubble, text);
+      return;
+    }
+    const before = text.slice(0, openIndex).trim();
+    const inner = text.slice(openIndex + CORRECTION_OPEN.length, closeIndex).trim();
+    const after = text.slice(closeIndex + CORRECTION_CLOSE.length).trim();
+    const lines = inner.split("\n");
+    const beforeEl = document.createElement("div");
+    beforeEl.textContent = before;
+    const details = document.createElement("details");
+    const summary = document.createElement("summary");
+    summary.textContent = lines[0] || "纠错：点开看参考答案";
     const body = document.createElement("div");
     body.textContent = lines.slice(1).join("\n");
     details.append(summary, body);
@@ -267,7 +296,7 @@
     if (message.annotations && message.annotations.length > 0) {
       appendAnnotatedText(bubble, message.text, message.annotations);
     } else {
-      appendTextWithPrelearning(bubble, message.text);
+      appendTextWithCorrection(bubble, message.text);
     }
     if (message.translation) {
       // 可展开中文翻译（A1–A2 支架档）：默认折叠，点开即读。

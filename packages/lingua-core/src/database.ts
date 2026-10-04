@@ -31,8 +31,10 @@ type Migration = {
 // 供「不泄题」规则审计。
 // 全部按语言隔离，user_id 预留。
 // 版本号占位协调：v5 归票 06（并发施工）；v6 归票 12；v7 归票 07；
-// v8 归票 10（并发施工）；v9/v10/v12 由其它并发票据占位（08/09/14）；
-// v11 归票 13；v13 归票 11。
+// v8 归票 10（并发施工）；v9 归本票（issue #8）；v10/v12 由其它并发票据占位
+// （09/14）；v11 归票 13；v13 归票 11。
+// v9：错误日志字段扩展（quote/chunk_id/phenomenon/correction）与
+// ambush_topics.digest_sent_at（系统小结发送标记），优先复用 v1 错误日志表。
 const MIGRATIONS: Migration[] = [
   {
     version: 1,
@@ -334,6 +336,19 @@ const MIGRATIONS: Migration[] = [
         CHECK (pipeline_status IN ('inbox','unlock_queued','simplified','dismissed'));
       CREATE INDEX idx_content_items_pipeline_status
         ON content_items (user_id, language, pipeline_status, created_at);
+    `,
+  },
+  {
+    version: 9,
+    // 错误日志与系统小结（issue #8）：复用 v1 错误日志表，
+    // 增加 quote/chunk_id/phenomenon/correction 以支持留白式纠错；
+    // ambush_topics 增加 digest_sent_at 标记系统小结已发送。
+    sql: `
+      ALTER TABLE error_logs ADD COLUMN quote TEXT;
+      ALTER TABLE error_logs ADD COLUMN chunk_id TEXT REFERENCES chunks (id);
+      ALTER TABLE error_logs ADD COLUMN phenomenon TEXT;
+      ALTER TABLE error_logs ADD COLUMN correction TEXT;
+      ALTER TABLE ambush_topics ADD COLUMN digest_sent_at INTEGER;
     `,
   },
   {

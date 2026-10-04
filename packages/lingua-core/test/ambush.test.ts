@@ -23,9 +23,10 @@ import {
   T0,
 } from "./helpers";
 
-// 埋伏调度（issue #7，docs/specs/mvp.md 双联系人与主动性）：候选池 = 到期语块，
+// 埋伏调度（issue #7/#8，docs/specs/mvp.md 双联系人与主动性）：候选池 = 到期语块，
 // 事件驱动有料才起（无死配额）；每话题埋 2–4 个到期语块、同语块 48h 内最多埋
-// 2 次、未命中回炉重排；每日主动起话题至多 3 次。不泄题硬规则（ADR-0013）：
+// 2 次、未命中回炉重排；判分闭环同时写入错误日志，供系统小结消费。
+// 每日主动起话题至多 3 次。不泄题硬规则（ADR-0013）：
 // 话题生成提示不得包含目标语块形式或直译。
 
 function makeDue(
@@ -381,5 +382,54 @@ describe("埋伏闭环：Judge + 事件 + 状态（issue #7 验收）", () => {
       )
       .all(AMBUSH_HIT_METRIC, "c1") as unknown as { value: number }[];
     expect(hits.map((r) => r.value)).toEqual([0]);
+  });
+
+  it("判分错误用法时写入错误日志，且错误日志不进入学习者状态（ADR-0009）", async () => {
+    const harness = makeHarness();
+    const { db, clock, store } = harness;
+    makeDue(harness, ["c1", "c2"], { forms: { c1: "look for", c2: "see you around" } });
+
+    clock.set(T0 + 2 * DAY);
+    const ambush = openAmbush({ db, clock });
+    const plan = ambush.planAmbushTopic("en")!;
+
+    const before = store.currentBeliefAt(clock.now());
+    const chunkBefore = before.chunks.find((c) => c.chunkId === "c1")!;
+
+    // c1 被用户使用但用法错误。
+    const judge = createJudge({ db, usageJudge: fakeUsageJudge({ outcome: "wrong", confidence: 0.85 }) });
+    const resolved = await ambush.resolveTopic({
+      topicId: plan.topicId,
+      userText: "I look for my keys yesterday.",
+      judge,
+      store,
+    });
+
+    const placement = resolved.placements.find((p) => p.chunkId === "c1")!;
+    expect(placement.outcome).toBe("missed");
+    expect(placement.verdict.outcome).toBe("wrong");
+
+    // 错误日志写入独立表，包含现象与参考答案。
+    const errors = db
+      .prepare("SELECT * FROM error_logs WHERE topic_id = ?")
+      .all(plan.topicId) as unknown as {
+      chunk_id: string;
+      original_text: string;
+      quote: string;
+      phenomenon: string;
+      correction: string;
+    }[];
+    expect(errors).toHaveLength(1);
+    expect(errors[0]!.chunk_id).toBe("c1");
+    expect(errors[0]!.quote).toBe("look for");
+    expect(errors[0]!.phenomenon).toBeTruthy();
+    expect(errors[0]!.correction).toContain("look for");
+
+    // 错误用法仍按 ADR-0013 更新学习者状态（again / failure），
+    // 但错误日志表本身不直接写入状态——状态只由 events 管线决定。
+    const after = store.currentBeliefAt(clock.now());
+    const chunkAfter = after.chunks.find((c) => c.chunkId === "c1")!;
+    expect(chunkAfter.dueAt).not.toBe(chunkBefore.dueAt);
+    expect(chunkAfter.lastEventType).toBe("independent-attempt-failed");
   });
 });

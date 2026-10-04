@@ -146,6 +146,7 @@ describe("schema", () => {
       "prompt",
       "opened_at",
       "closed_at",
+      "digest_sent_at",
       "user_id",
       "language",
     ]) {
@@ -167,6 +168,34 @@ describe("schema", () => {
     ]) {
       expect(placementColumns).toContain(column);
     }
+  });
+
+  it("expands error_logs for prompt-style corrections and tracks digest_sent_at (issue #8)", () => {
+    const db = openDatabase(":memory:");
+    migrate(db);
+
+    const errorLogColumns = db
+      .prepare("PRAGMA table_info(error_logs)")
+      .all()
+      .map((row) => (row as { name: string }).name);
+    for (const column of [
+      "quote",
+      "chunk_id",
+      "phenomenon",
+      "correction",
+      "original_text",
+      "topic_id",
+      "user_id",
+      "language",
+    ]) {
+      expect(errorLogColumns).toContain(column);
+    }
+
+    const topicColumns = db
+      .prepare("PRAGMA table_info(ambush_topics)")
+      .all()
+      .map((row) => (row as { name: string }).name);
+    expect(topicColumns).toContain("digest_sent_at");
   });
 
   it("tracks RSS subscription poll state and audio content (issue #11)", () => {

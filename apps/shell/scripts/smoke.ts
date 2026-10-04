@@ -302,6 +302,12 @@ try {
     assert.match(html, /register-neutral/);
   });
 
+  await check("页面含留白式纠错折叠渲染（点开看参考答案，issue #8）", async () => {
+    const html = await fetch(`${api}/`).then((r) => r.text());
+    assert.match(html, /\[\[纠错\]\]/, "应识别小结的纠错标记");
+    assert.match(html, /参考答案/, "折叠摘要/正文出现参考答案入口");
+  });
+
   await check("系统会话可手动调档，立即生效", async () => {
     const reply = await postJson(`${api}/api/messages`, { contact: "system", text: "支架 on-request" });
     assert.equal(reply.role, "assistant");
@@ -313,6 +319,52 @@ try {
     assert.equal(reply.role, "assistant");
     assert.equal(reply.translation, null, "on-request 档不应保存翻译");
     assert.equal(callCount, 6, "调档后角色轮仍走模型一次");
+  });
+
+  await check("系统小结：话题结束后进入系统会话，角色会话零打断（issue #8）", async () => {
+    const systemBefore = await getJson(`${api}/api/messages?contact=system`);
+    const companionBefore = await getJson(`${api}/api/messages?contact=companion`);
+
+    // 直接构造一个 31 分钟前开的话题（触发 30 分钟空闲边界）+ 3 条错误日志
+    //（同时满足错误阈值）。无 API key，不经模型：投递是纯规则路径。
+    const now = Date.now();
+    server!.db
+      .prepare(
+        `INSERT INTO ambush_topics (id, language, status, topic_text, prompt, opened_at, closed_at)
+         VALUES (?, ?, 'open', ?, ?, ?, NULL)`,
+      )
+      .run("smoke-topic", "en", "How was your weekend?", "smoke prompt", now - 31 * 60 * 1000);
+    const insertError = server!.db.prepare(
+      `INSERT INTO error_logs (id, language, original_text, topic_id, phenomenon, correction, created_at)
+       VALUES (?, 'en', ?, 'smoke-topic', ?, ?, ?)`,
+    );
+    insertError.run("smoke-e1", "I look up it.", "这个表达里有个地方不太对，能发现吗？", "参考答案：look it up", now - 40 * 60 * 1000);
+    insertError.run("smoke-e2", "He go to school.", "这句话的动词形式有什么问题？", "参考答案：He goes to school.", now - 39 * 60 * 1000);
+    insertError.run("smoke-e3", "I am agree.", "agree 前面需要 be 动词吗？", "参考答案：I agree.", now - 38 * 60 * 1000);
+
+    const report = server!.scheduler.tick();
+    assert.ok(report.ran.includes("system-digest"), `调度应运行 system-digest（ran: ${report.ran.join(",")}）`);
+
+    const systemAfter = await getJson(`${api}/api/messages?contact=system`);
+    assert.equal(systemAfter.length, systemBefore.length + 1, "恰投递一条系统小结");
+    const digest = systemAfter[systemAfter.length - 1];
+    assert.equal(digest.role, "assistant");
+    assert.match(digest.text, /【系统小结】/);
+    assert.match(digest.text, /话题已结束/);
+    assert.match(digest.text, /判分回顾/);
+    assert.match(digest.text, /\[\[纠错\]\]/, "小结含留白式纠错标记（点开看参考答案）");
+    assert.match(digest.text, /明日到期/);
+
+    const companionAfter = await getJson(`${api}/api/messages?contact=companion`);
+    assert.equal(companionAfter.length, companionBefore.length, "角色会话零打断：消息数不变");
+    for (const message of companionAfter) {
+      assert.doesNotMatch(message.text, /【系统小结】|\[\[纠错\]\]/, "角色会话不得出现学习性纠错");
+    }
+
+    // 幂等：同一话题再次 tick 不重复投递（digest_sent_at 标记）。
+    server!.scheduler.tick();
+    const systemFinal = await getJson(`${api}/api/messages?contact=system`);
+    assert.equal(systemFinal.length, systemAfter.length, "重复 tick 不重复投递小结");
   });
 
   await check("持久化跨重启：重开服务后消息仍在", async () => {
@@ -337,9 +389,10 @@ try {
       const system = await getJson(`${base(reopened.port)}/api/messages?contact=system`);
       assert.equal(
         system.length,
-        13,
-        "系统会话不重复播种欢迎文案，课包不重复推送，链接与调档历史保留",
+        14,
+        "系统会话不重复播种欢迎文案，课包不重复推送，链接、调档与系统小结历史保留",
       );
+      assert.match(system[13]!.text, /【系统小结】/, "小结随库保留");
       // 重启后 tick：第二课仍待预学完成，不推新课；备份按间隔节流。
       const report = reopened.scheduler.tick();
       assert.equal(
